@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ilotech97x.github.io/immobilier/sitemap.xml
