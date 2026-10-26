@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ilotech97x.github.io/immobilier/sitemap.xml
+Sitemap: https://immo.ilo-tech.com/sitemap.xml
