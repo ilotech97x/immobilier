@@ -830,12 +830,13 @@ async function pageConversation(type, id) {
     const nonLus = m.filter(x => !x.lu && x.de !== moi.id).map(x => x.id);
     if (nonLus.length) { await sb.from('messages').update({ lu: true }).in('id', nonLus); compter(); }
   };
-  await charger();
-  clearInterval(minuterie); minuterie = setInterval(() => { if (location.hash.startsWith('#/conversation/')) charger().catch(() => {}); else clearInterval(minuterie); }, 8000);
+  // envoi branché avant le premier chargement : un message tapé vite ne recharge jamais la page
   $('#fMsg').addEventListener('submit', async e => {
     e.preventDefault(); const t = e.target.t.value.trim(); if (!t) return;
     try { await q(sb.from('messages').insert({ [cle]: id, texte: t })); e.target.reset(); charger(); } catch (err) { toast(erreur(err), true); }
   });
+  await charger();
+  clearInterval(minuterie); minuterie = setInterval(() => { if (location.hash.startsWith('#/conversation/')) charger().catch(() => {}); else clearInterval(minuterie); }, 8000);
 }
 
 // -------- avis
