@@ -10,9 +10,7 @@ const sb = PRET ? window.supabase.createClient(CFG.url, CFG.cle, { auth: { flowT
 const WA = '596696482678';
 
 // ---------------------------------------------------------------- référentiels
-const COMMUNES = ['Ajoupa-Bouillon', 'Basse-Pointe', 'Bellefontaine', 'Case-Pilote', 'Ducos', 'Fonds-Saint-Denis', 'Fort-de-France', 'Grand’Rivière', 'Gros-Morne', 'La Trinité',
-  'Le Carbet', 'Le Diamant', 'Le François', 'Le Lamentin', 'Le Lorrain', 'Le Marigot', 'Le Marin', 'Le Morne-Rouge', 'Le Morne-Vert', 'Le Prêcheur', 'Le Robert', 'Le Vauclin',
-  'Les Anses-d’Arlet', 'Les Trois-Îlets', 'Macouba', 'Rivière-Pilote', 'Rivière-Salée', 'Saint-Esprit', 'Saint-Joseph', 'Saint-Pierre', 'Sainte-Anne', 'Sainte-Luce', 'Sainte-Marie', 'Schœlcher'];
+// territoires, villes, fuseaux et indicatifs : commun/territoires.js (chargé avant ce fichier)
 const TYPES = { villa: 'Villa', maison: 'Maison créole', appartement: 'Appartement', studio: 'Studio', gite: 'Gîte', bungalow: 'Bungalow' };
 const EQUIP = [['wifi', '📶', 'Wi-Fi'], ['clim', '❄️', 'Climatisation'], ['piscine', '🏊', 'Piscine'], ['vue_mer', '🌊', 'Vue mer'], ['plage', '🏖️', 'Plage à pied'],
   ['parking', '🚗', 'Parking'], ['cuisine', '🍳', 'Cuisine équipée'], ['lave_linge', '🧺', 'Lave-linge'], ['jardin', '🌴', 'Jardin'], ['terrasse', '☀️', 'Terrasse'],
@@ -40,9 +38,12 @@ const nuits = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T1
 const photo = p => !p ? '' : /^https:\/\//.test(p) ? p : PRET ? sb.storage.from('photos').getPublicUrl(p).data.publicUrl : '';
 const tag = ([c, t]) => `<span class="tag ${c}">${esc(t)}</span>`;
 const initiale = p => esc(((p?.prenom || '?')[0] || '?').toUpperCase());
-const wa = (tel, txt) => `https://wa.me/${String(tel || WA).replace(/\D/g, '').replace(/^0/, '596')}?text=${encodeURIComponent(txt)}`;
+const wa = (tel, txt) => `https://wa.me/${telInternational(tel || WA) || WA}?text=${encodeURIComponent(txt)}`;
 const opts = (o, v) => Object.entries(o).map(([k, t]) => `<option value="${esc(k)}" ${k === v ? 'selected' : ''}>${esc(t)}</option>`).join('');
-const optsCommunes = (v, vide = 'Toute la Martinique') => `<option value="">${esc(vide)}</option>` + COMMUNES.map(c => `<option ${c === v ? 'selected' : ''}>${esc(c)}</option>`).join('');
+const lieu = x => esc(x.commune) + (x.territoire && x.territoire !== 'Autre pays' ? ', ' + esc(x.territoire) : '');
+// champ « territoire + ville » (ville libre avec suggestions)
+const champsLieu = (t, v, id, req = true, vide = '') => `<label>Territoire<select name="territoire" ${req ? 'required' : ''} data-villes="${id}">${optsTerritoires(t, vide)}</select></label><label>Ville<input name="commune" ${req ? 'required' : ''} maxlength="60" list="${id}" value="${esc(v || '')}" autocomplete="address-level2"></label>${listeVilles(id, t)}`;
+const brancherLieux = () => document.querySelectorAll('select[data-villes]').forEach(s => brancherVilles(s, s.dataset.villes));
 const param = () => Object.fromEntries(new URLSearchParams((location.hash.split('?')[1] || '')));
 const aller = h => { if (location.hash === h) rendre(); else location.hash = h; };
 
@@ -146,7 +147,7 @@ function carteLogement(l, notes) {
   return `<a class="carte" href="#/logement/${l.id}">
     <div class="ph">${l.photos?.[0] ? `<img src="${esc(photo(l.photos[0]))}" alt="${esc(l.titre)}" loading="lazy">` : '<span class="vide">🏝️</span>'}</div>
     ${moi ? `<button class="coeur ${favoris.has(l.id) ? 'on' : ''}" data-fav="${l.id}" aria-label="Favori">${favoris.has(l.id) ? '♥' : '♡'}</button>` : ''}
-    <div class="corps"><div class="l1"><span>${esc(l.commune)}</span>${n ? `<span class="etoile">★ ${n.moyenne} (${n.nombre})</span>` : '<span class="tag">Nouveau</span>'}</div>
+    <div class="corps"><div class="l1"><span>${lieu(l)}</span>${n ? `<span class="etoile">★ ${n.moyenne} (${n.nombre})</span>` : '<span class="tag">Nouveau</span>'}</div>
       <div class="muted">${esc(l.titre)}</div>
       <div class="muted petit">${esc(TYPES[l.type] || '')} · ${l.chambres} ch. · ${l.voyageurs} voyageurs</div>
       <div class="prix"><b>${eur(l.prix_nuit)}</b> <span class="muted">/ nuit</span></div></div></a>`;
@@ -171,13 +172,14 @@ document.addEventListener('click', async ev => {
 // ---------------------------------------------------------------- accueil et recherche
 function barreRecherche(p = {}) {
   return `<form class="recherche" id="fRech">
-    <label><span>Où</span><select name="commune">${optsCommunes(p.commune || '')}</select></label>
+    <label><span>Où</span><select name="territoire" aria-label="Territoire">${optsTerritoires(p.territoire || '', 'Tous les territoires')}</select><input name="commune" list="villesR" placeholder="Ville (facultatif)" value="${esc(p.commune || '')}" aria-label="Ville" style="font-size:13px">${listeVilles('villesR', p.territoire)}</label>
     <label><span>Arrivée</span><input type="date" name="arrivee" min="${auj()}" value="${esc(p.arrivee || '')}"></label>
     <label><span>Départ</span><input type="date" name="depart" min="${auj()}" value="${esc(p.depart || '')}"></label>
     <label><span>Voyageurs</span><input type="number" name="voyageurs" min="1" max="40" value="${esc(p.voyageurs || 2)}"></label>
     <button class="btn btn-p">🔎 Rechercher</button></form>`;
 }
 function brancherRecherche() {
+  const t = document.querySelector('#fRech [name=territoire]'); if (t) brancherVilles(t, 'villesR');
   $('#fRech')?.addEventListener('submit', e => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target)); const p = new URLSearchParams();
@@ -191,8 +193,8 @@ async function pageAccueil() {
   vue(`
     <section class="hero"><div class="wrap">
       <div class="onglets"><a class="on" href="#/">🏝️ Séjours</a><a href="#/services">🧹 Services pour la maison</a><a href="#/retour">✈️ Retour au pays</a></div>
-      <h1>Votre kaz en Martinique, <em>réservée en confiance</em>.</h1>
-      <p>Villas, gîtes et appartements proposés par des propriétaires vérifiés, et des prestataires de confiance pour le ménage, l’accueil, le jardin ou la piscine.</p>
+      <h1>Votre kaz, <em>réservée en confiance</em>.</h1>
+      <p>Martinique, Guadeloupe, Guyane, La Réunion, Hexagone et ailleurs : villas, gîtes et appartements de propriétaires vérifiés, et des prestataires de confiance pour le ménage, l’accueil, le jardin ou la piscine.</p>
       ${barreRecherche()}
     </div></section>
     <div class="wrap">
@@ -224,7 +226,7 @@ async function pageAccueil() {
   if (PRET) charger(); else $('#liste').innerHTML = videLogements();
 }
 const videLogements = () => `<div class="vide-etat"><div class="ico">🏝️</div><h3>Les premiers logements arrivent</h3>
-  <p class="muted">Nous vérifions les premières annonces des propriétaires. Vous avez un logement en Martinique ? Publiez-le gratuitement.</p>
+  <p class="muted">Nous vérifions les premières annonces des propriétaires. Vous avez un logement, aux Antilles ou ailleurs ? Publiez-le gratuitement.</p>
   <a class="btn btn-p" href="${moi ? '#/compte/partenaire' : '#/inscription?partenaire=1'}">Publier mon logement</a></div>`;
 
 async function pageRecherche() {
@@ -238,7 +240,8 @@ async function pageRecherche() {
   const charger = async () => {
     try {
       let r = sb.from('logements').select('*').eq('statut', 'publie');
-      if (p.commune) r = r.eq('commune', p.commune);
+      if (p.territoire) r = r.eq('territoire', p.territoire);
+      if (p.commune) r = r.ilike('commune', `%${p.commune.replace(/[%_*,()]/g, '')}%`);
       if (p.voyageurs) r = r.gte('voyageurs', Number(p.voyageurs));
       const type = $('#type').value, pmax = Number($('#pmax').value), tri = $('#tri').value;
       if (type) r = r.eq('type', type);
@@ -248,8 +251,8 @@ async function pageRecherche() {
       if (p.arrivee && p.depart) { const libres = new Set(await q(sb.rpc('logements_libres', { d1: p.arrivee, d2: p.depart }))); l = l.filter(x => libres.has(x.id)); }
       const n = await notesDe(l.map(x => x.id));
       $('#liste').className = l.length ? 'grille' : '';
-      $('#liste').innerHTML = `<p class="muted" style="grid-column:1/-1">${l.length} logement${l.length > 1 ? 's' : ''}${p.commune ? ' à ' + esc(p.commune) : ''}${p.arrivee && p.depart ? ' libres du ' + jour(p.arrivee) + ' au ' + jour(p.depart) : ''}</p>` +
-        (l.length ? l.map(x => carteLogement(x, n)).join('') : '<div class="vide-etat" style="grid-column:1/-1"><div class="ico">🔎</div><h3>Aucun logement pour ces critères</h3><p class="muted">Essayez d’autres dates ou toute la Martinique.</p></div>');
+      $('#liste').innerHTML = `<p class="muted" style="grid-column:1/-1">${l.length} logement${l.length > 1 ? 's' : ''}${p.commune ? ' à ' + esc(p.commune) : p.territoire ? ' · ' + esc(p.territoire) : ''}${p.arrivee && p.depart ? ' libres du ' + jour(p.arrivee) + ' au ' + jour(p.depart) : ''}</p>` +
+        (l.length ? l.map(x => carteLogement(x, n)).join('') : '<div class="vide-etat" style="grid-column:1/-1"><div class="ico">🔎</div><h3>Aucun logement pour ces critères</h3><p class="muted">Essayez d’autres dates ou un autre territoire.</p></div>');
     } catch (e) { $('#liste').innerHTML = `<p class="muted">${esc(erreur(e))}</p>`; }
   };
   ['#tri', '#type', '#pmax'].forEach(s => $(s).addEventListener('change', charger));
@@ -289,12 +292,12 @@ async function pageLogement(id) {
     vue(`<div class="wrap" style="padding-top:20px">
       <a href="javascript:history.back()" class="petit">← Retour</a>
       <h1 style="margin-top:8px">${esc(l.titre)}</h1>
-      <div class="specs"><span>📍 ${esc(l.commune)}${l.quartier ? ', ' + esc(l.quartier) : ''}</span>${note ? `<span class="etoile">★ ${note.moyenne} · ${note.nombre} avis</span>` : '<span class="tag">Nouveau</span>'}
+      <div class="specs"><span>📍 ${l.quartier ? esc(l.quartier) + ', ' : ''}${lieu(l)}</span>${note ? `<span class="etoile">★ ${note.moyenne} · ${note.nombre} avis</span>` : '<span class="tag">Nouveau</span>'}
         ${moi ? `<button class="lien" data-fav="${l.id}">${favoris.has(l.id) ? '♥ Dans vos favoris' : '♡ Ajouter aux favoris'}</button>` : ''}
         ${l.statut !== 'publie' ? tag(ST_ANN[l.statut]) : ''}</div>
       <div class="galerie g${Math.max(1, Math.min(ph.length, 5))}">${(ph.length ? ph.slice(0, 5) : [null]).map((p, i) => `<div>${p ? `<img src="${esc(photo(p))}" alt="Photo ${i + 1} : ${esc(l.titre)}" data-zoom="${i}" ${i ? 'loading="lazy"' : ''}>` : ''}</div>`).join('')}${ph.length > 5 ? `<button class="btn btn-s" data-zoom="0" style="position:absolute;right:14px;bottom:14px">Voir les ${ph.length} photos</button>` : ''}</div>
       <div class="fiche"><div>
-        <h2 style="font-size:22px">${esc(TYPES[l.type])} · ${esc(l.commune)}</h2>
+        <h2 style="font-size:22px">${esc(TYPES[l.type])} · ${lieu(l)}</h2>
         <div class="specs"><span>👥 ${l.voyageurs} voyageurs</span><span>🛏️ ${l.chambres} chambre${l.chambres > 1 ? 's' : ''} · ${l.lits} lit${l.lits > 1 ? 's' : ''}</span><span>🛁 ${l.sdb} salle${l.sdb > 1 ? 's' : ''} d’eau</span></div>
         ${l.visite3d ? `<p><a class="btn btn-v" href="${esc(l.visite3d)}" target="_blank" rel="noopener">🧊 Visite virtuelle 3D</a></p>` : ''}
         <div class="bloc hote"><div class="avatar">${hote?.avatar ? `<img src="${esc(photo(hote.avatar))}" alt="">` : initiale(hote)}</div>
@@ -358,19 +361,22 @@ async function pageServices(cat) {
   vue(`<div class="wrap" style="padding-top:24px">
     <h1>${cat && CATS[cat] ? CATS[cat][0] + ' ' + esc(CATS[cat][1]) : 'Des services pour votre maison'}</h1>
     <p class="muted">Ménage, accueil des voyageurs, jardin, piscine, petits travaux : des prestataires vérifiés (SIRET et assurance), avec le prix affiché avant.</p>
-    <div class="puces">${['', ...Object.keys(CATS)].map(k => `<a class="btn btn-s ${k === (cat || '') ? 'btn-v' : ''}" href="#/services${k ? '/' + k : ''}">${k ? CATS[k][0] + ' ' + esc(CATS[k][1]) : 'Tous'}</a>`).join('')}</div>
+    <label class="petit">Territoire : <select id="terrSv">${optsTerritoires(param().territoire || '', 'Tous')}</select></label>
+    <div class="puces">${['', ...Object.keys(CATS)].map(k => `<a class="btn btn-s ${k === (cat || '') ? 'btn-v' : ''}" href="#/services${k ? '/' + k : ''}${param().territoire ? '?territoire=' + encodeURIComponent(param().territoire) : ''}">${k ? CATS[k][0] + ' ' + esc(CATS[k][1]) : 'Tous'}</a>`).join('')}</div>
     <div id="liste" class="chargement">Chargement…</div></div>`);
+  $('#terrSv').addEventListener('change', e => aller(`#/services${cat ? '/' + cat : ''}${e.target.value ? '?territoire=' + encodeURIComponent(e.target.value) : ''}`));
   if (!PRET) return ($('#liste').innerHTML = videServices());
   try {
     let r = sb.from('prestations').select('*, profiles!prestations_prestataire_id_fkey(prenom, avatar)').eq('statut', 'publie').eq('actif', true).order('created_at', { ascending: false });
     if (cat) r = r.eq('categorie', cat);
+    if (param().territoire) r = r.eq('territoire', param().territoire);
     const s = await q(r), n = await notesDe(s.map(x => x.id));
     $('#liste').className = s.length ? 'grille' : '';
     $('#liste').innerHTML = s.length ? s.map(x => `<a class="carte" href="#/prestation/${x.id}">
       <div class="ph" style="aspect-ratio:16/9">${x.photos?.[0] ? `<img src="${esc(photo(x.photos[0]))}" alt="" loading="lazy">` : `<span class="vide">${CATS[x.categorie][0]}</span>`}</div>
       <div class="corps"><div class="l1"><span>${esc(x.titre)}</span>${n[x.id] ? `<span class="etoile">★ ${n[x.id].moyenne}</span>` : ''}</div>
         <div class="muted petit">${CATS[x.categorie][0]} ${esc(CATS[x.categorie][1])} · par ${esc(x.profiles?.prenom || 'un prestataire')}</div>
-        <div class="muted petit">📍 ${x.communes.length ? esc(x.communes.slice(0, 3).join(', ')) + (x.communes.length > 3 ? '…' : '') : 'Toute la Martinique'}</div>
+        <div class="muted petit">📍 ${x.communes.length ? esc(x.communes.slice(0, 3).join(', ')) + (x.communes.length > 3 ? '…' : '') + ' · ' : 'Tout le territoire · '}${esc(x.territoire)}</div>
         <div class="prix"><span class="muted">À partir de</span> <b>${eur(x.prix)}</b> <span class="muted">${esc(UNITES[x.unite])}</span></div></div></a>`).join('') : videServices();
   } catch (e) { $('#liste').innerHTML = `<p>${esc(erreur(e))}</p>`; }
 }
@@ -397,25 +403,26 @@ async function pagePrestation(id) {
           <div><b>${esc(pr?.prenom || 'Prestataire')}</b> ${pr?.valide ? '<span class="tag ok">✓ SIRET et assurance vérifiés</span>' : ''}<div class="muted petit">${esc((pr?.metiers || []).join(' · '))}</div></div></div>
         ${pr?.bio ? `<div class="bloc"><p style="white-space:pre-line">${esc(pr.bio)}</p></div>` : ''}
         <div class="bloc"><h3>La prestation</h3><p style="white-space:pre-line">${esc(s.description) || '<span class="muted">—</span>'}</p>
-          <p>📍 ${s.communes.length ? esc(s.communes.join(', ')) : 'Toute la Martinique'}</p></div>
+          <p>📍 ${s.communes.length ? esc(s.communes.join(', ')) + ' · ' : 'Tout le territoire · '}${esc(s.territoire)}</p></div>
         <div class="bloc"><h3>Avis</h3>${avis.length ? avis.map(a => `<div class="avis1"><b>${'★'.repeat(a.note)}${'☆'.repeat(5 - a.note)}</b><span>${esc(a.texte)}</span></div>`).join('') : '<p class="muted">Pas encore d’avis.</p>'}</div>
       </div>
       <aside class="resa"><div><span class="muted">À partir de</span> <span class="p">${eur(s.prix)}</span> <span class="muted">${esc(UNITES[s.unite])}</span></div>
         <form id="fDem" class="f" style="margin-top:14px">
           <div class="ligne2"><label>Date<input type="date" name="jour" required min="${auj()}"></label><label>Créneau<select name="creneau">${opts(CRENEAUX, 'matin')}</select></label></div>
           ${mesLog.length ? `<label>Pour quel logement ?<select name="logement_id"><option value="">Autre adresse</option>${mesLog.map(x => `<option value="${x.id}">${esc(x.titre)} (${esc(x.commune)})</option>`).join('')}</select></label>` : ''}
-          <label>Commune<select name="commune" required>${optsCommunes(profil?.commune || '', 'Choisir…')}</select></label>
+          <div class="ligne2">${champsLieu(s.territoire, profil?.territoire === s.territoire ? profil?.commune : '', 'villesD')}</div>
           <label>Adresse <span class="aide">(visible seulement par le prestataire)</span><input name="adresse" maxlength="300" autocomplete="street-address"></label>
           <label>Votre besoin<textarea name="message" maxlength="2000" placeholder="Surface, nombre de chambres, accès, clés…"></textarea></label>
           <button class="btn btn-p" ${moi?.id === s.prestataire_id ? 'disabled' : ''}>Envoyer la demande</button>
           <p class="muted petit" style="margin:0">Le prestataire confirme le prix exact avant de venir. Aucun paiement en ligne.</p></form></aside></div></div>`);
+    brancherLieux();
     $('#fDem').addEventListener('submit', async e => {
       e.preventDefault(); if (!exigeCompte()) return;
       const d = Object.fromEntries(new FormData(e.target));
-      if (!d.commune) return toast('Choisissez la commune.', true);
+      if (!d.commune.trim()) return toast('Indiquez la ville.', true);
       const b = e.target.querySelector('button'); b.disabled = true;
       try {
-        await q(sb.from('demandes').insert({ prestation_id: id, jour: d.jour, creneau: d.creneau, commune: d.commune, adresse: d.adresse || null, message: d.message || null, logement_id: d.logement_id || null }));
+        await q(sb.from('demandes').insert({ prestation_id: id, jour: d.jour, creneau: d.creneau, territoire: d.territoire, commune: d.commune.trim(), adresse: d.adresse || null, message: d.message || null, logement_id: d.logement_id || null }));
         toast('Demande envoyée au prestataire !'); aller('#/compte/services');
       } catch (err) { toast(erreur(err), true); b.disabled = false; }
     });
@@ -423,9 +430,9 @@ async function pagePrestation(id) {
 }
 
 function pageRetour() {
-  const txt = 'Bonjour Kaz An Nou, je prépare mon retour en Martinique. Date d’arrivée : … · Commune : … · Mes besoins : …';
+  const txt = 'Bonjour Kaz An Nou, je prépare mon retour au pays. Territoire : … · Ville : … · Date d’arrivée : … · Mes besoins : …';
   vue(`<section class="hero"><div class="wrap"><h1>Retour au pays : <em>on prépare votre arrivée</em>.</h1>
-    <p>Vous revenez vivre en Martinique ou vous y êtes muté ? Depuis l’île, on s’occupe de ce qui ne peut pas se faire à distance.</p>
+    <p>Vous revenez vivre aux Antilles, en Guyane, à La Réunion ou à Mayotte, ou vous y êtes muté ? Sur place, on s’occupe de ce qui ne peut pas se faire à distance.</p>
     <a class="btn btn-p" href="${wa(WA, txt)}" target="_blank" rel="noopener">Parler de mon projet sur WhatsApp</a></div></section>
     <div class="wrap section"><div class="cats">${[['📹', 'Visite vidéo en direct', 'd’un logement que vous avez trouvé, avant de signer'], ['🛰️', 'Internet prêt', 'box ou Starlink installé avant votre arrivée'],
       ['🧹', 'Logement prêt', 'ménage fait, premières courses'], ['📝', 'Démarches', 'aide pour les compteurs, contrats et inscriptions en ligne'], ['🚚', 'Déménagement', 'déménageurs et artisans partenaires'], ['📱', 'Appareils prêts', 'téléphone, ordinateur et Wi-Fi réglés']]
@@ -585,15 +592,17 @@ async function ongletFavoris(c) {
 async function ongletProfil(c) {
   c.innerHTML = `<h1>Mon profil</h1><form class="f" id="fPro" style="max-width:560px">
     <div class="ligne2"><label>Prénom<input name="prenom" maxlength="60" value="${esc(profil.prenom)}"></label><label>Nom<input name="nom" maxlength="60" value="${esc(profil.nom)}"></label></div>
-    <div class="ligne2"><label>Téléphone<input type="tel" name="telephone" pattern="[0-9 +]{6,20}" value="${esc(contact?.telephone || '')}"></label><label>Commune<select name="commune">${optsCommunes(profil.commune || '', '—')}</select></label></div>
+    <div class="ligne2"><label>Téléphone<input type="tel" name="telephone" pattern="[0-9 +]{6,20}" value="${esc(contact?.telephone || '')}"></label></div>
+    <div class="ligne2">${champsLieu(profil.territoire || '', profil.commune, 'villesP', false, '—')}</div>
     <label>Présentation <span class="aide">(visible sur vos annonces si vous êtes partenaire)</span><textarea name="bio" maxlength="1500">${esc(profil.bio || '')}</textarea></label>
     <label>Photo de profil<input type="file" name="avatar" accept="image/*"></label>
     <button class="btn btn-p">Enregistrer</button></form>
     <div class="bloc" style="margin-top:20px"><h3>Mes données</h3><p class="muted petit">Email : ${esc(moi.email)}. Pour supprimer votre compte et vos données, écrivez à ilotech.contact@gmail.com : c’est fait sous 30 jours.</p></div>`;
+  brancherLieux();
   $('#fPro').addEventListener('submit', async e => {
     e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)); const b = e.target.querySelector('button'); b.disabled = true;
     try {
-      const maj = { prenom: d.prenom.trim(), nom: d.nom.trim(), commune: d.commune || null, bio: d.bio.trim() || null };
+      const maj = { prenom: d.prenom.trim(), nom: d.nom.trim(), territoire: d.territoire || null, commune: d.commune.trim() || null, bio: d.bio.trim() || null };
       if (e.target.avatar.files[0]) maj.avatar = (await envoyerPhotos([e.target.avatar.files[0]]))[0];
       await q(sb.from('profiles').update(maj).eq('id', moi.id));
       await q(sb.from('contacts').update({ telephone: d.telephone.trim() || null }).eq('id', moi.id));
@@ -633,7 +642,7 @@ async function ongletLogements(c, sous) {
   const l = await q(sb.from('logements').select('*').eq('owner', moi.id).order('created_at', { ascending: false }));
   c.innerHTML = `<div class="titre-s"><h1>Mes logements</h1><a class="btn btn-p" href="#/compte/logements/nouveau">+ Ajouter</a></div>
     ${l.length ? l.map(x => `<div class="ligne-l">${x.photos[0] ? `<img class="mini" src="${esc(photo(x.photos[0]))}" alt="">` : '<div class="mini"></div>'}
-      <div><b>${esc(x.titre)}</b> ${tag(ST_ANN[x.statut])}<div class="muted petit">${esc(x.commune)} · ${eur(x.prix_nuit)} / nuit · ${x.photos.length} photo${x.photos.length > 1 ? 's' : ''}</div>
+      <div><b>${esc(x.titre)}</b> ${tag(ST_ANN[x.statut])}<div class="muted petit">${lieu(x)} · ${eur(x.prix_nuit)} / nuit · ${x.photos.length} photo${x.photos.length > 1 ? 's' : ''}</div>
         ${x.statut === 'refuse' && x.motif_refus ? `<div class="petit" style="color:var(--ko)">Motif : ${esc(x.motif_refus)}</div>` : ''}</div>
       <div class="actions"><a class="btn btn-s" href="#/compte/logements/${x.id}">Modifier</a><a class="btn btn-s" href="#/logement/${x.id}">Voir</a><a class="btn btn-s" href="#/compte/carnet/${x.id}">Carnet</a>
         ${['brouillon', 'refuse'].includes(x.statut) ? `<button class="btn btn-s btn-v" data-envoi="${x.id}">Envoyer en validation</button>` : ''}
@@ -653,13 +662,14 @@ async function ongletLogements(c, sous) {
 }
 
 async function formLogement(c, id) {
-  const l = id ? await q(sb.from('logements').select('*').eq('id', id).single()) : { titre: '', description: '', type: 'villa', commune: profil.commune || '', chambres: 1, lits: 1, sdb: 1, voyageurs: 2, prix_nuit: '', menage: 0, min_nuits: 1, equipements: [], photos: [], arrivee: '16 h', depart: '11 h', regles: '', visite3d: '', quartier: '' };
+  const l = id ? await q(sb.from('logements').select('*').eq('id', id).single()) : { titre: '', description: '', type: 'villa', territoire: profil.territoire || 'Martinique', commune: profil.commune || '', chambres: 1, lits: 1, sdb: 1, voyageurs: 2, prix_nuit: '', menage: 0, min_nuits: 1, equipements: [], photos: [], arrivee: '16 h', depart: '11 h', regles: '', visite3d: '', quartier: '' };
   let photos = [...l.photos];
   const dessinerPhotos = () => { $('#ph').innerHTML = photos.map((p, i) => `<div><img src="${esc(photo(p))}" alt=""><button type="button" data-suppr="${i}" aria-label="Retirer">×</button></div>`).join(''); };
   c.innerHTML = `<a href="#/compte/logements" class="petit">← Mes logements</a><h1>${id ? 'Modifier le logement' : 'Nouveau logement'}</h1>
     <form class="f" id="fLog" style="max-width:760px">
       <label>Titre de l’annonce<input name="titre" required minlength="3" maxlength="120" value="${esc(l.titre)}" placeholder="ex. Villa créole vue mer avec piscine"></label>
-      <div class="ligne3"><label>Type<select name="type">${opts(TYPES, l.type)}</select></label><label>Commune<select name="commune" required>${optsCommunes(l.commune, 'Choisir…')}</select></label><label>Quartier <span class="aide">(facultatif)</span><input name="quartier" maxlength="80" value="${esc(l.quartier || '')}"></label></div>
+      <div class="ligne2"><label>Type<select name="type">${opts(TYPES, l.type)}</select></label><label>Quartier <span class="aide">(facultatif)</span><input name="quartier" maxlength="80" value="${esc(l.quartier || '')}"></label></div>
+      <div class="ligne2">${champsLieu(l.territoire, l.commune, 'villesL')}</div>
       <div class="ligne3"><label>Voyageurs max<input type="number" name="voyageurs" min="1" max="40" value="${l.voyageurs}"></label><label>Chambres<input type="number" name="chambres" min="0" max="30" value="${l.chambres}"></label><label>Lits<input type="number" name="lits" min="0" max="60" value="${l.lits}"></label></div>
       <div class="ligne3"><label>Salles d’eau<input type="number" name="sdb" min="0" max="30" value="${l.sdb}"></label><label>Prix par nuit (€)<input type="number" name="prix_nuit" required min="1" max="20000" step="1" value="${esc(l.prix_nuit)}"></label><label>Frais de ménage (€)<input type="number" name="menage" min="0" max="2000" value="${l.menage}"></label></div>
       <div class="ligne3"><label>Nuits minimum<input type="number" name="min_nuits" min="1" max="90" value="${l.min_nuits}"></label><label>Arrivée<input name="arrivee" maxlength="20" value="${esc(l.arrivee || '')}"></label><label>Départ<input name="depart" maxlength="20" value="${esc(l.depart || '')}"></label></div>
@@ -671,7 +681,7 @@ async function formLogement(c, id) {
       <div class="actions"><button class="btn btn-p" name="envoi" value="en_attente">${id && l.statut === 'publie' ? 'Enregistrer' : 'Enregistrer et envoyer en validation'}</button>${!id || l.statut !== 'publie' ? '<button class="btn" name="envoi" value="brouillon">Garder en brouillon</button>' : ''}
         ${id && ['brouillon', 'refuse'].includes(l.statut) ? '<button type="button" class="btn btn-ko" id="supprLog">Supprimer</button>' : ''}${id && l.statut === 'publie' ? '<button type="button" class="btn btn-ko" id="archLog">Retirer de la location</button>' : ''}</div>
       <p class="muted petit">Changer le titre, la description ou les photos d’une annonce en ligne la renvoie en validation (sous 48 h).</p></form>`;
-  dessinerPhotos();
+  dessinerPhotos(); brancherLieux();
   $('#ph').addEventListener('click', e => { const b = e.target.closest('[data-suppr]'); if (b) { photos.splice(Number(b.dataset.suppr), 1); dessinerPhotos(); } });
   $('#ajoutPh').addEventListener('change', async e => {
     const f = [...e.target.files].slice(0, 20 - photos.length); if (!f.length) return;
@@ -682,7 +692,7 @@ async function formLogement(c, id) {
   const f = $('#fLog');
   f.addEventListener('submit', async e => {
     e.preventDefault(); const d = Object.fromEntries(new FormData(f)); const envoi = e.submitter?.value || 'en_attente';
-    const ligne = { titre: d.titre.trim(), type: d.type, commune: d.commune, quartier: d.quartier.trim() || null, voyageurs: +d.voyageurs, chambres: +d.chambres, lits: +d.lits, sdb: +d.sdb,
+    const ligne = { titre: d.titre.trim(), type: d.type, territoire: d.territoire, commune: d.commune.trim(), quartier: d.quartier.trim() || null, voyageurs: +d.voyageurs, chambres: +d.chambres, lits: +d.lits, sdb: +d.sdb,
       prix_nuit: +d.prix_nuit, menage: +d.menage || 0, min_nuits: +d.min_nuits, arrivee: d.arrivee.trim() || null, depart: d.depart.trim() || null, description: d.description.trim(),
       equipements: new FormData(f).getAll('eq'), regles: d.regles.trim() || null, visite3d: d.visite3d.trim() || null, photos };
     if (!(id && l.statut === 'publie')) ligne.statut = envoi;
@@ -776,20 +786,21 @@ async function ongletPrestations(c, sous) {
       : '<div class="vide-etat"><div class="ico">🧰</div><h3>Ajoutez votre première prestation</h3><a class="btn btn-p" href="#/compte/prestations/nouvelle">Ajouter</a></div>'}`;
 }
 async function formPrestation(c, id) {
-  const s = id ? await q(sb.from('prestations').select('*').eq('id', id).single()) : { categorie: 'menage', titre: '', description: '', prix: '', unite: 'prestation', communes: [], actif: true, photos: [] };
+  const s = id ? await q(sb.from('prestations').select('*').eq('id', id).single()) : { categorie: 'menage', titre: '', description: '', prix: '', unite: 'prestation', territoire: profil.territoire || 'Martinique', communes: [], actif: true, photos: [] };
   c.innerHTML = `<a href="#/compte/prestations" class="petit">← Mes prestations</a><h1>${id ? 'Modifier la prestation' : 'Nouvelle prestation'}</h1>
     <form class="f" id="fSv" style="max-width:720px">
       <div class="ligne2"><label>Catégorie<select name="categorie">${opts(Object.fromEntries(Object.entries(CATS).map(([k, v]) => [k, v[0] + ' ' + v[1]])), s.categorie)}</select></label><label>Titre<input name="titre" required minlength="3" maxlength="120" value="${esc(s.titre)}" placeholder="ex. Ménage complet entre deux voyageurs"></label></div>
       <div class="ligne2"><label>Prix à partir de (€)<input type="number" name="prix" required min="0" max="20000" value="${esc(s.prix)}"></label><label>Par<select name="unite">${opts(UNITES, s.unite)}</select></label></div>
       <label>Description<textarea name="description" maxlength="3000">${esc(s.description)}</textarea></label>
-      <fieldset style="border:0;padding:0;margin:0"><legend style="font-weight:600;margin-bottom:6px">Communes où vous intervenez <span class="aide">(aucune cochée = toute la Martinique)</span></legend>
-        <div class="cases">${COMMUNES.map(x => `<label><input type="checkbox" name="com" value="${esc(x)}" ${s.communes.includes(x) ? 'checked' : ''}> ${esc(x)}</label>`).join('')}</div></fieldset>
+      <div class="ligne2"><label>Territoire<select name="territoire" required data-villes="villesS">${optsTerritoires(s.territoire)}</select></label>
+        <label>Villes où vous intervenez <span class="aide">(séparées par des virgules ; vide = tout le territoire)</span><input name="zones" maxlength="400" list="villesS" value="${esc(s.communes.join(', '))}"></label>${listeVilles('villesS', s.territoire)}</div>
       <label style="display:flex;gap:8px;font-weight:400"><input type="checkbox" name="actif" ${s.actif ? 'checked' : ''} style="width:auto"> Prestation active (décochez pour la mettre en pause)</label>
       <button class="btn btn-p">Enregistrer</button>${id ? '<button type="button" class="btn btn-ko" id="supprSv">Supprimer</button>' : ''}
       <p class="muted petit">Chaque nouvelle prestation est vérifiée avant sa mise en ligne.</p></form>`;
+  brancherLieux();
   $('#fSv').addEventListener('submit', async e => {
     e.preventDefault(); const f = e.target, d = Object.fromEntries(new FormData(f));
-    const ligne = { categorie: d.categorie, titre: d.titre.trim(), prix: +d.prix, unite: d.unite, description: d.description.trim(), communes: new FormData(f).getAll('com'), actif: !!d.actif };
+    const ligne = { categorie: d.categorie, titre: d.titre.trim(), prix: +d.prix, unite: d.unite, description: d.description.trim(), territoire: d.territoire, communes: d.zones.split(',').map(x => x.trim()).filter(Boolean).slice(0, 40), actif: !!d.actif };
     try { if (id) await q(sb.from('prestations').update(ligne).eq('id', id)); else await q(sb.from('prestations').insert(ligne)); toast('Enregistré.'); aller('#/compte/prestations'); }
     catch (err) { toast(erreur(err), true); }
   });
@@ -901,7 +912,7 @@ async function rendre() {
   const h = (location.hash || '#/').split('?')[0];
   const [, a, b, c2] = h.split('/');
   nav(); window.scrollTo(0, 0);
-  document.title = 'Kaz An Nou — Séjours et services pour la maison en Martinique';
+  document.title = 'Kaz An Nou — Séjours et services pour la maison, aux Antilles et ailleurs';
   try {
     if (!a) return await pageAccueil();
     if (a === 'recherche') return await pageRecherche();
