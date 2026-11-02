@@ -664,6 +664,7 @@ async function ongletLogements(c, sous) {
 }
 
 async function formLogement(c, id) {
+  const avecVideo = !(await sb.from('logements').select('video').limit(1)).error;   // colonne ajoutée par la mise à jour de la base
   const l = id ? await q(sb.from('logements').select('*').eq('id', id).single()) : { titre: '', description: '', type: 'villa', territoire: profil.territoire || 'Martinique', commune: profil.commune || '', chambres: 1, lits: 1, sdb: 1, voyageurs: 2, prix_nuit: '', menage: 0, min_nuits: 1, equipements: [], photos: [], arrivee: '16 h', depart: '11 h', regles: '', visite3d: '', quartier: '' };
   let photos = [...l.photos];
   const dessinerPhotos = () => { $('#ph').innerHTML = photos.map((p, i) => `<div><img src="${esc(photo(p))}" alt=""><button type="button" data-suppr="${i}" aria-label="Retirer">×</button></div>`).join(''); };
@@ -679,7 +680,7 @@ async function formLogement(c, id) {
       <fieldset class="f" style="border:0;padding:0;margin:0"><legend style="font-weight:600;margin-bottom:6px">Équipements</legend><div class="cases">${EQUIP.map(([k, i, t]) => `<label><input type="checkbox" name="eq" value="${k}" ${l.equipements.includes(k) ? 'checked' : ''}> ${i} ${esc(t)}</label>`).join('')}</div></fieldset>
       <label>Règles de la maison<textarea name="regles" maxlength="2000" placeholder="Non-fumeur, fêtes interdites, animaux…">${esc(l.regles || '')}</textarea></label>
       <label>Lien de visite virtuelle 3D <span class="aide">(facultatif, https://…)</span><input name="visite3d" type="url" pattern="https://.*" value="${esc(l.visite3d || '')}"></label>
-      <label>Lien d’une vidéo <span class="aide">(facultatif : fichier .mp4, YouTube, Facebook… en https://)</span><input name="video" type="url" pattern="https://.*" maxlength="300" value="${esc(l.video || '')}"></label>
+      ${avecVideo ? '' : '<!--'}<label>Lien d’une vidéo <span class="aide">(facultatif : fichier .mp4, YouTube, Facebook… en https://)</span><input name="video" type="url" pattern="https://.*" maxlength="300" value="${esc(l.video || '')}"></label>${avecVideo ? '' : '-->'}
       <div><b>Photos</b> <span class="aide">(jusqu’à 20 ; la première est la photo principale)</span><div class="photos-ed" id="ph" style="margin:8px 0"></div><input type="file" id="ajoutPh" accept="image/*" multiple></div>
       <div class="actions"><button class="btn btn-p" name="envoi" value="en_attente">${id && l.statut === 'publie' ? 'Enregistrer' : 'Enregistrer et envoyer en validation'}</button>${!id || l.statut !== 'publie' ? '<button class="btn" name="envoi" value="brouillon">Garder en brouillon</button>' : ''}
         ${id && ['brouillon', 'refuse'].includes(l.statut) ? '<button type="button" class="btn btn-ko" id="supprLog">Supprimer</button>' : ''}${id && l.statut === 'publie' ? '<button type="button" class="btn btn-ko" id="archLog">Retirer de la location</button>' : ''}</div>
@@ -697,7 +698,7 @@ async function formLogement(c, id) {
     e.preventDefault(); const d = Object.fromEntries(new FormData(f)); const envoi = e.submitter?.value || 'en_attente';
     const ligne = { titre: d.titre.trim(), type: d.type, territoire: d.territoire, commune: d.commune.trim(), quartier: d.quartier.trim() || null, voyageurs: +d.voyageurs, chambres: +d.chambres, lits: +d.lits, sdb: +d.sdb,
       prix_nuit: +d.prix_nuit, menage: +d.menage || 0, min_nuits: +d.min_nuits, arrivee: d.arrivee.trim() || null, depart: d.depart.trim() || null, description: d.description.trim(),
-      equipements: new FormData(f).getAll('eq'), regles: d.regles.trim() || null, visite3d: d.visite3d.trim() || null, video: d.video.trim() || null, photos };
+      equipements: new FormData(f).getAll('eq'), regles: d.regles.trim() || null, visite3d: d.visite3d.trim() || null, ...(avecVideo ? { video: (d.video || '').trim() || null } : {}), photos };
     if (!(id && l.statut === 'publie')) ligne.statut = envoi;
     if (envoi === 'en_attente' && !photos.length) return toast('Ajoutez au moins une photo avant l’envoi en validation.', true);
     try {
