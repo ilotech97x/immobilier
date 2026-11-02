@@ -221,3 +221,13 @@ table.t th{background:var(--sable);font-size:12px;text-transform:uppercase;lette
   .f .ligne2,.f .ligne3{grid-template-columns:1fr}
   .hero{padding:34px 0 46px}
 }
+
+/* petits écrans (320–380 px) : aucun champ ni bouton ne dépasse */
+.f{grid-template-columns:minmax(0,1fr)}
+.f label,.f .ligne2>*,.f .ligne3>*{min-width:0}
+.f .ligne2{grid-template-columns:repeat(2,minmax(0,1fr))}.f .ligne3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:760px){.f .ligne2,.f .ligne3{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:380px){.wrap{padding:0 14px}.carte-f{padding:18px 16px;margin:18px auto}}
+
+/* vidéo d'un logement */
+.video-log{width:100%;max-width:520px;aspect-ratio:1;border-radius:var(--r);background:#000;display:block}

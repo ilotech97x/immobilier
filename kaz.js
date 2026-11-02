@@ -299,6 +299,8 @@ async function pageLogement(id) {
       <div class="fiche"><div>
         <h2 style="font-size:22px">${esc(TYPES[l.type])} · ${lieu(l)}</h2>
         <div class="specs"><span>👥 ${l.voyageurs} voyageurs</span><span>🛏️ ${l.chambres} chambre${l.chambres > 1 ? 's' : ''} · ${l.lits} lit${l.lits > 1 ? 's' : ''}</span><span>🛁 ${l.sdb} salle${l.sdb > 1 ? 's' : ''} d’eau</span></div>
+        ${l.video ? (/\.mp4(\?|$)/i.test(l.video) ? `<div class="bloc"><h3>🎬 Visite en vidéo</h3><video class="video-log" src="${esc(l.video)}" controls playsinline preload="metadata" ${ph[0] ? `poster="${esc(photo(ph[0]))}"` : ''}></video></div>`
+          : `<p><a class="btn btn-v" href="${esc(l.video)}" target="_blank" rel="noopener">🎬 Voir la vidéo</a></p>`) : ''}
         ${l.visite3d ? `<p><a class="btn btn-v" href="${esc(l.visite3d)}" target="_blank" rel="noopener">🧊 Visite virtuelle 3D</a></p>` : ''}
         <div class="bloc hote"><div class="avatar">${hote?.avatar ? `<img src="${esc(photo(hote.avatar))}" alt="">` : initiale(hote)}</div>
           <div><b>Proposé par ${esc(hote?.prenom || 'un propriétaire')}</b> ${hote?.valide ? '<span class="tag ok">✓ Vérifié par Kaz An Nou</span>' : ''}<div class="muted petit">Membre depuis ${hote ? new Date(hote.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : '—'}</div></div></div>
@@ -475,7 +477,7 @@ function pageInscription() {
       <label>Email<input type="email" name="email" required autocomplete="email"></label>
       <label>Téléphone <span class="aide">(partagé seulement avec vos hôtes ou prestataires)</span><input type="tel" name="telephone" pattern="[0-9 +]{6,20}" autocomplete="tel"></label>
       <label>Mot de passe <span class="aide">(8 caractères minimum)</span><input type="password" name="mdp" required minlength="8" autocomplete="new-password"></label>
-      <label style="display:flex;gap:8px;font-weight:400"><input type="checkbox" required style="width:auto"> J’accepte les <a href="cgu.html" target="_blank">conditions d’utilisation</a> et la <a href="https://ilo-tech.com/confidentialite.html" target="_blank">politique de confidentialité</a>.</label>
+      <label style="display:flex;gap:8px;font-weight:400"><input type="checkbox" required style="width:auto"> <span>J’accepte les <a href="cgu.html" target="_blank">conditions d’utilisation</a> et la <a href="https://ilo-tech.com/confidentialite.html" target="_blank">politique de confidentialité</a>.</span></label>
       <button class="btn btn-p">Créer mon compte</button></form>
     <p class="muted">Déjà inscrit ? <a href="#/connexion">Se connecter</a></p></div></div>`);
   $('#fIns').addEventListener('submit', async e => {
@@ -624,7 +626,7 @@ async function ongletPartenaire(c) {
       <label>SIRET <span class="aide">(obligatoire pour les prestataires ; propriétaires : facultatif)</span><input name="siret" inputmode="numeric" pattern="[0-9 ]{9,17}" value="${esc(profil.siret || '')}"></label>
       <label style="display:flex;gap:8px;font-weight:400"><input type="checkbox" name="assurance" ${profil.assurance ? 'checked' : ''} style="width:auto"> J’ai une assurance responsabilité civile (professionnelle pour les prestataires)</label>
       <label>Présentez-vous en quelques lignes<textarea name="bio" maxlength="1500">${esc(profil.bio || '')}</textarea></label>
-      <label style="display:flex;gap:8px;font-weight:400"><input type="checkbox" required style="width:auto"> J’accepte les <a href="cgu.html#partenaires" target="_blank">conditions partenaires</a> : prix annoncés avant, travail déclaré, respect des clients.</label>
+      <label style="display:flex;gap:8px;font-weight:400"><input type="checkbox" required style="width:auto"> <span>J’accepte les <a href="cgu.html#partenaires" target="_blank">conditions partenaires</a> : prix annoncés avant, travail déclaré, respect des clients.</span></label>
       <button class="btn btn-p">Envoyer ma demande</button></form>`;
   $('#fPart').addEventListener('submit', async e => {
     e.preventDefault(); const d = Object.fromEntries(new FormData(e.target));
@@ -677,6 +679,7 @@ async function formLogement(c, id) {
       <fieldset class="f" style="border:0;padding:0;margin:0"><legend style="font-weight:600;margin-bottom:6px">Équipements</legend><div class="cases">${EQUIP.map(([k, i, t]) => `<label><input type="checkbox" name="eq" value="${k}" ${l.equipements.includes(k) ? 'checked' : ''}> ${i} ${esc(t)}</label>`).join('')}</div></fieldset>
       <label>Règles de la maison<textarea name="regles" maxlength="2000" placeholder="Non-fumeur, fêtes interdites, animaux…">${esc(l.regles || '')}</textarea></label>
       <label>Lien de visite virtuelle 3D <span class="aide">(facultatif, https://…)</span><input name="visite3d" type="url" pattern="https://.*" value="${esc(l.visite3d || '')}"></label>
+      <label>Lien d’une vidéo <span class="aide">(facultatif : fichier .mp4, YouTube, Facebook… en https://)</span><input name="video" type="url" pattern="https://.*" maxlength="300" value="${esc(l.video || '')}"></label>
       <div><b>Photos</b> <span class="aide">(jusqu’à 20 ; la première est la photo principale)</span><div class="photos-ed" id="ph" style="margin:8px 0"></div><input type="file" id="ajoutPh" accept="image/*" multiple></div>
       <div class="actions"><button class="btn btn-p" name="envoi" value="en_attente">${id && l.statut === 'publie' ? 'Enregistrer' : 'Enregistrer et envoyer en validation'}</button>${!id || l.statut !== 'publie' ? '<button class="btn" name="envoi" value="brouillon">Garder en brouillon</button>' : ''}
         ${id && ['brouillon', 'refuse'].includes(l.statut) ? '<button type="button" class="btn btn-ko" id="supprLog">Supprimer</button>' : ''}${id && l.statut === 'publie' ? '<button type="button" class="btn btn-ko" id="archLog">Retirer de la location</button>' : ''}</div>
@@ -694,7 +697,7 @@ async function formLogement(c, id) {
     e.preventDefault(); const d = Object.fromEntries(new FormData(f)); const envoi = e.submitter?.value || 'en_attente';
     const ligne = { titre: d.titre.trim(), type: d.type, territoire: d.territoire, commune: d.commune.trim(), quartier: d.quartier.trim() || null, voyageurs: +d.voyageurs, chambres: +d.chambres, lits: +d.lits, sdb: +d.sdb,
       prix_nuit: +d.prix_nuit, menage: +d.menage || 0, min_nuits: +d.min_nuits, arrivee: d.arrivee.trim() || null, depart: d.depart.trim() || null, description: d.description.trim(),
-      equipements: new FormData(f).getAll('eq'), regles: d.regles.trim() || null, visite3d: d.visite3d.trim() || null, photos };
+      equipements: new FormData(f).getAll('eq'), regles: d.regles.trim() || null, visite3d: d.visite3d.trim() || null, video: d.video.trim() || null, photos };
     if (!(id && l.statut === 'publie')) ligne.statut = envoi;
     if (envoi === 'en_attente' && !photos.length) return toast('Ajoutez au moins une photo avant l’envoi en validation.', true);
     try {
