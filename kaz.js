@@ -17,7 +17,10 @@ const EQUIP = [['wifi', '📶', 'Wi-Fi'], ['clim', '❄️', 'Climatisation'], [
   ['starlink', '🛰️', 'Internet Starlink'], ['serrure', '🔐', 'Arrivée autonome'], ['citerne', '💧', 'Citerne d’eau'], ['groupe', '⚡', 'Groupe électrogène'],
   ['bebe', '👶', 'Équipement bébé'], ['pmr', '♿', 'Accessible PMR'], ['animaux', '🐾', 'Animaux acceptés'], ['travail', '💻', 'Espace de travail']];
 const CATS = { menage: ['🧹', 'Ménage'], accueil: ['🔑', 'Accueil voyageurs'], linge: ['🧺', 'Linge et blanchisserie'], controle: ['🏠', 'Logement contrôlé'],
-  jardin: ['🌴', 'Jardin'], piscine: ['🏊', 'Piscine'], travaux: ['🛠️', 'Petits travaux'], cyclone: ['🌀', 'Mode cyclone'], retour: ['✈️', 'Retour au pays'], technique: ['📡', 'Wi-Fi, caméras, serrures'] };
+  jardin: ['🌴', 'Jardin'], piscine: ['🏊', 'Piscine'], travaux: ['🛠️', 'Petits travaux'], cyclone: ['🌀', 'Mode cyclone'], retour: ['✈️', 'Retour au pays'], technique: ['📡', 'Wi-Fi, caméras, serrures'],
+  plomberie: ['🚰', 'Plomberie'], electricite: ['⚡', 'Électricité'], clim: ['❄️', 'Climatisation'], informatique: ['💻', 'Informatique'], mecanique: ['🚗', 'Mécanique auto et moto'],
+  electromenager: ['🔧', 'Réparation électroménager'], demenagement: ['📦', 'Déménagement'], beaute: ['💇', 'Coiffure et beauté à domicile'], cours: ['📚', 'Cours et soutien scolaire'],
+  garde: ['👶', 'Garde d’enfants et d’animaux'], autre: ['✨', 'Autres services'] };
 const UNITES = { prestation: 'la prestation', heure: 'de l’heure', passage: 'le passage', mois: 'par mois' };
 const CRENEAUX = { matin: 'Matin', 'apres-midi': 'Après-midi', soir: 'Soir', journee: 'Journée' };
 const ST_RESA = { demande: ['att', 'En attente'], acceptee: ['ok', 'Confirmée'], refusee: ['ko', 'Refusée'], annulee: ['gris', 'Annulée'], blocage: ['gris', 'Dates bloquées'] };
@@ -361,8 +364,8 @@ function visionneuse(urls, i) {
 // ---------------------------------------------------------------- services pour la maison
 async function pageServices(cat) {
   vue(`<div class="wrap" style="padding-top:24px">
-    <h1>${cat && CATS[cat] ? CATS[cat][0] + ' ' + esc(CATS[cat][1]) : 'Des services pour votre maison'}</h1>
-    <p class="muted">Ménage, accueil des voyageurs, jardin, piscine, petits travaux : des prestataires vérifiés (SIRET et assurance), avec le prix affiché avant.</p>
+    <h1>${cat && CATS[cat] ? CATS[cat][0] + ' ' + esc(CATS[cat][1]) : 'Trouvez le bon pro, près de chez vous'}</h1>
+    <p class="muted">Plombier, électricien, informaticien, mécanicien, jardinier, ménage, conciergerie, cours, garde d’enfants : des prestataires vérifiés (SIRET et assurance), avec le prix affiché avant et les avis des clients.</p>
     <label class="petit">Territoire : <select id="terrSv">${optsTerritoires(param().territoire || '', 'Tous')}</select></label>
     <div class="puces">${['', ...Object.keys(CATS)].map(k => `<a class="btn btn-s ${k === (cat || '') ? 'btn-v' : ''}" href="#/services${k ? '/' + k : ''}${param().territoire ? '?territoire=' + encodeURIComponent(param().territoire) : ''}">${k ? CATS[k][0] + ' ' + esc(CATS[k][1]) : 'Tous'}</a>`).join('')}</div>
     <div id="liste" class="chargement">Chargement…</div></div>`);
