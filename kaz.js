@@ -526,10 +526,15 @@ async function ongletAccueil(c) {
   const [v, d] = await Promise.all([
     q(sb.from('reservations').select('id').eq('client_id', moi.id).in('statut', ['demande', 'acceptee']).gte('fin', auj())),
     q(sb.from('demandes').select('id').eq('client_id', moi.id).in('statut', ['demande', 'acceptee']))]);
+  const cm = (role('proprietaire') || role('prestataire')) ? await sb.rpc('mes_commissions').then(r => r.error || !r.data?.lignes?.length ? null : r.data) : null;
+  const euros = n => Number(n).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   c.innerHTML = `<h1>Bonjour ${esc(profil.prenom || '')} 👋</h1>
     <div class="stat"><div><b>${v.length}</b>séjour${v.length > 1 ? 's' : ''} à venir</div><div><b>${d.length}</b>service${d.length > 1 ? 's' : ''} en cours</div><div><b>${favoris.size}</b>favori${favoris.size > 1 ? 's' : ''}</div><div><b>${compteurs.msgs}</b>message${compteurs.msgs > 1 ? 's' : ''} non lu${compteurs.msgs > 1 ? 's' : ''}</div></div>
     ${profil.demande_role ? `<div class="vide-etat" style="text-align:left;margin-bottom:18px">⏳ Votre demande pour devenir <b>${profil.demande_role === 'proprietaire' ? 'propriétaire' : 'prestataire'}</b> est en cours de vérification. Nous vous répondons sous 48 h.</div>` : ''}
     ${compteurs.resa ? `<div class="vide-etat" style="text-align:left;margin-bottom:18px">🔔 Vous avez <b>${compteurs.resa}</b> demande${compteurs.resa > 1 ? 's' : ''} à traiter : <a href="#/compte/${role('proprietaire') ? 'recues' : 'demandes'}">voir</a></div>` : ''}
+    ${cm ? `<details class="bloc" style="margin-bottom:18px"><summary><b>💶 Commission Kaz An Nou</b> · à régler : <b>${euros(cm.due)}</b> <span class="muted petit">· ce mois ${euros(cm.ventes_mois)} de ventes</span></summary>
+      <p class="petit muted">8 % sur les séjours acceptés et les prestations réalisées. Vos clients vous paient directement ; la commission est réglée chaque mois.</p>
+      ${cm.lignes.map(x => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0"><span>${x.source === 'reservation' ? '🏡 Séjour' : '🔧 Prestation'} · ${new Date(x.created_at).toLocaleDateString('fr-FR')}</span><b style="${x.statut === 'annulee' ? 'text-decoration:line-through;opacity:.5' : ''}">${euros(x.montant)}${x.statut === 'payee' ? ' ✓' : ''}</b></div>`).join('')}</details>` : ''}
     <div class="actions"><a class="btn btn-p" href="#/">Trouver un séjour</a><a class="btn" href="#/services">Réserver un service</a>
       ${role('proprietaire') ? '<a class="btn" href="#/compte/logements/nouveau">Ajouter un logement</a>' : ''}${role('prestataire') ? '<a class="btn" href="#/compte/prestations/nouvelle">Ajouter une prestation</a>' : ''}</div>`;
 }
