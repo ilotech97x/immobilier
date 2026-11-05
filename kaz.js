@@ -480,7 +480,7 @@ function pageInscription() {
       <label>Email<input type="email" name="email" required autocomplete="email"></label>
       <label>Téléphone <span class="aide">(partagé seulement avec vos hôtes ou prestataires)</span><input type="tel" name="telephone" pattern="[0-9 +]{6,20}" autocomplete="tel"></label>
       <label>Mot de passe <span class="aide">(8 caractères minimum)</span><input type="password" name="mdp" required minlength="8" autocomplete="new-password"></label>
-      <label style="display:flex;gap:8px;font-weight:400"><input type="checkbox" required style="width:auto"> <span>J’accepte les <a href="cgu.html" target="_blank">conditions d’utilisation</a> et la <a href="https://ilo-tech.com/confidentialite.html" target="_blank">politique de confidentialité</a>.</span></label>
+      <label style="display:flex;gap:8px;font-weight:400"><input type="checkbox" required style="width:auto"> <span>J’accepte les <a href="cgu.html" target="_blank">conditions d’utilisation</a> et la <a href="confidentialite.html" target="_blank">politique de confidentialité</a>.</span></label>
       <button class="btn btn-p">Créer mon compte</button></form>
     <p class="muted">Déjà inscrit ? <a href="#/connexion">Se connecter</a></p></div></div>`);
   $('#fIns').addEventListener('submit', async e => {
