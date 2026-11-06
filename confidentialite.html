@@ -27,6 +27,7 @@
         <tr><td>Compte : prénom, nom, email, téléphone, territoire, mot de passe (chiffré, illisible même pour nous)</td><td>Vous connecter avec un seul compte ; vous joindre pour une commande, une course ou une réservation</td><td>Contrat</td></tr>
         <tr><td>Commandes (Woulib) : articles, montants, livraison ou retrait, adresse de livraison, heure programmée, code promo, pourboire</td><td>Transmettre la commande au restaurant ou au commerce, la faire livrer</td><td>Contrat</td></tr>
         <tr><td>Courses et colis (Woulib) : départ, arrivée, prix estimé ; pour un colis, le nom et le téléphone du destinataire</td><td>Trouver un chauffeur ou un livreur, suivre le trajet</td><td>Contrat</td></tr>
+        <tr><td>Adresses enregistrées (Woulib), seulement si vous les ajoutez à votre compte : leur nom (Maison, Travail…), l’adresse et sa position</td><td>Vous les proposer pour vos trajets et vos livraisons, sur tous vos appareils. Personne d’autre ne les voit</td><td>Contrat</td></tr>
         <tr><td>Professionnels (restaurateurs, commerçants, chauffeurs, livreurs, organisateurs, hôtes, prestataires) : identité, SIRET, carte professionnelle, véhicule, immatriculation, offre publiée</td><td>Vérifier les pros, publier leur offre, calculer les commissions</td><td>Contrat ; obligations légales</td></tr>
         <tr><td>Position d’un chauffeur ou d’un livreur : la dernière seulement</td><td>Envoyer la mission la plus proche, montrer son arrivée au client</td><td>Contrat</td></tr>
         <tr><td>Billets (EventPass) : billets, nom sur le billet, entrées contrôlées, favoris, liste d’attente</td><td>Délivrer et contrôler les billets</td><td>Contrat</td></tr>
@@ -48,7 +49,7 @@
     <ul>
       <li><b>Supabase</b> : base de données et comptes, hébergés en Irlande (Union européenne). Il envoie aussi les emails de compte (inscription, mot de passe oublié).</li>
       <li><b>GitHub</b> (États-Unis) : hébergement des pages des applis ; il reçoit l’adresse IP des visiteurs. Le transfert est encadré par le cadre UE–États-Unis de protection des données ou par des clauses contractuelles types.</li>
-      <li><b>OpenStreetMap</b> (fonds de carte) et <b>Nominatim</b> (recherche d’adresses), de la Fondation OpenStreetMap (Royaume-Uni) : ils reçoivent l’adresse IP et l’adresse cherchée.</li>
+      <li><b>OpenStreetMap</b> (fonds de carte) et <b>Nominatim</b> (recherche d’adresses), de la Fondation OpenStreetMap (Royaume-Uni) : ils reçoivent l’adresse IP et l’adresse cherchée (ou la position, si vous enregistrez « Ma position » comme adresse).</li>
       <li><b>OSRM</b> : serveur public de calcul d’itinéraires utilisé par le GPS ; il reçoit les points du trajet demandé.</li>
       <li><b>WhatsApp</b> (Meta), seulement si vous choisissez d’écrire par WhatsApp, à nous ou à un professionnel.</li>
     </ul>
@@ -58,6 +59,7 @@
       <li>Compte : tant que vous l’utilisez. Après 3 ans sans connexion, nous vous prévenons, puis nous l’anonymisons.</li>
       <li>Commandes, courses, colis, billets, réservations : 5 ans (preuve en cas de litige). La part comptable (montants, commissions) : 10 ans.</li>
       <li>Position d’un chauffeur ou d’un livreur : seulement la dernière, effacée dès qu’il n’est plus disponible et n’a plus de mission.</li>
+      <li>Adresses enregistrées : jusqu’à ce que vous les retiriez (Compte › Adresses) ou que vous supprimiez votre compte.</li>
       <li>Alertes route du GPS : quelques heures.</li>
       <li>Notifications : 1 an. Demandes d’assistance : 1 an après la réponse. Signalements : 3 ans après la décision (preuve des mesures prises).</li>
     </ul>
@@ -67,7 +69,8 @@
       Les chauffeurs et les livreurs partagent leur position seulement quand ils sont disponibles ou en mission. Le GPS de Woulib calcule l’itinéraire avec le serveur OSRM ; nous ne gardons pas votre trajet.</p>
 
     <h2>7. Ce qui est gardé sur votre appareil</h2>
-    <p>L’appli garde sur votre téléphone ou votre ordinateur ce qui lui sert à fonctionner : votre session de connexion, votre panier, votre territoire, vos lieux favoris et quelques réglages d’affichage.
+    <p>L’appli garde sur votre téléphone ou votre ordinateur ce qui lui sert à fonctionner : votre session de connexion, votre panier, votre territoire, vos lieux favoris (s’ils ne sont pas dans votre compte), vos dernières recherches et quelques réglages d’affichage.
+      Ce que vous tapez dans la recherche sert à trouver les résultats : nous ne l’enregistrons pas.
       Ce stockage est strictement nécessaire : il ne demande pas votre accord. Les applis n’ont ni cookie publicitaire ni outil de mesure d’audience.</p>
 
     <h2>8. Vos droits</h2>
