@@ -7,6 +7,10 @@ if (window.top !== window.self) { try { window.top.location = window.location.hr
 const CFG = window.KAZ_CONFIG || {};
 const PRET = !!(CFG.url && CFG.cle && window.supabase);
 const sb = PRET ? window.supabase.createClient(CFG.url, CFG.cle, { auth: { flowType: 'pkce', persistSession: true, detectSessionInUrl: true } }) : null;
+// « Mot de passe oublié » : lien en flux implicite (les jetons voyagent dans le lien). Avec le flux PKCE de `sb`, il faudrait ouvrir l'email dans le
+// navigateur et sur le site qui ont fait la demande : depuis Gmail sur un autre appareil, ou vers Kaz An Nou qui reçoit les liens de toutes les applis, il échoue.
+const lienMdp = (email, retour = 'https://immo.ilo-tech.com/?nouveau-mdp=1') => window.supabase.createClient(CFG.url, CFG.cle, { auth: { flowType: 'implicit',
+  persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'ilotech-lien-mdp' } }).auth.resetPasswordForEmail(email, { redirectTo: retour });
 const WA = '596696482678';
 
 // ---------------------------------------------------------------- référentiels
@@ -466,7 +470,7 @@ function pageConnexion() {
   $('#oubli').addEventListener('click', async () => {
     const email = $('#fCo').email.value.trim();
     if (!email) return toast('Écrivez d’abord votre email ci-dessus.', true);
-    try { await q(sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname + '?nouveau-mdp=1' })); toast('Si un compte existe, un email de réinitialisation est envoyé.'); }
+    try { await q(lienMdp(email, location.origin + location.pathname + '?nouveau-mdp=1')); toast('Si un compte existe, un email de réinitialisation est envoyé.'); }
     catch (err) { toast(erreur(err), true); }
   });
 }
@@ -496,7 +500,12 @@ function pageNouveauMdp() {
   vue(`<div class="wrap"><div class="carte-f"><h1>Nouveau mot de passe</h1><form class="f" id="fMdp"><label>Nouveau mot de passe<input type="password" name="mdp" minlength="8" required autocomplete="new-password"></label><button class="btn btn-p">Enregistrer</button></form></div></div>`);
   $('#fMdp').addEventListener('submit', async e => {
     e.preventDefault();
-    try { await q(sb.auth.updateUser({ password: e.target.mdp.value })); toast('Mot de passe changé.'); history.replaceState(null, '', location.pathname + '#/compte'); rendre(); }
+    try {
+      await q(sb.auth.updateUser({ password: e.target.mdp.value })); history.replaceState(null, '', location.pathname + '#/compte');
+      vue(`<div class="wrap"><div class="carte-f" id="mdpChange"><h1>Mot de passe changé</h1><p>Il sert dans toutes les applis IloTech, avec le même email :</p>
+        <div class="actions"><a class="btn btn-p" href="#/compte">Mon compte</a><a class="btn" href="https://ilo-tech.com/woulib/">Woulib</a><a class="btn" href="https://ilo-tech.com/control/">ILO CONTROL</a>
+        <a class="btn" href="https://ilo-tech.com/pass/">EventPass</a><a class="btn" href="https://ilo-tech.com/nexora/">NEXORA</a></div></div></div>`);
+    }
     catch (err) { toast(erreur(err), true); }
   });
 }
@@ -950,6 +959,16 @@ async function rendre() {
       if (ev === 'PASSWORD_RECOVERY') { await chargerMoi(); return pageNouveauMdp(); }
       if (ev === 'SIGNED_OUT') { moi = null; profil = null; nav(); }
     });
+    const h = new URLSearchParams(location.hash.slice(1));   // retour du lien « mot de passe oublié » reçu par email
+    if (h.get('type') === 'recovery' && h.get('access_token') && h.get('refresh_token')) {
+      history.replaceState(null, '', location.pathname + '?nouveau-mdp=1');   // les jetons ne restent pas dans la barre d'adresse
+      const { error } = await sb.auth.setSession({ access_token: h.get('access_token'), refresh_token: h.get('refresh_token') });
+      if (!error) { await chargerMoi().catch(() => {}); return pageNouveauMdp(); }
+      toast('Ce lien ne fonctionne plus : redemandez-en un avec « Mot de passe oublié ? ».', true);
+    } else if (h.get('error_code') || h.get('error_description')) {
+      history.replaceState(null, '', location.pathname + '#/connexion');
+      toast(h.get('error_code') === 'otp_expired' ? 'Ce lien a expiré ou a déjà servi : redemandez-en un avec « Mot de passe oublié ? ».' : 'Lien invalide : redemandez-en un avec « Mot de passe oublié ? ».', true);
+    }
     await chargerMoi().catch(() => {});
     if (new URLSearchParams(location.search).has('nouveau-mdp') && moi) return pageNouveauMdp();
   }
