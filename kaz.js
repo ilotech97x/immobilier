@@ -30,6 +30,103 @@ const CRENEAUX = { matin: 'Matin', 'apres-midi': 'Après-midi', soir: 'Soir', jo
 const ST_RESA = { demande: ['att', 'En attente'], acceptee: ['ok', 'Confirmée'], refusee: ['ko', 'Refusée'], annulee: ['gris', 'Annulée'], blocage: ['gris', 'Dates bloquées'] };
 const ST_DEM = { demande: ['att', 'En attente'], acceptee: ['ok', 'Acceptée'], refusee: ['ko', 'Refusée'], faite: ['ok', 'Faite'], annulee: ['gris', 'Annulée'] };
 const ST_ANN = { brouillon: ['gris', 'Brouillon'], en_attente: ['att', 'En validation'], publie: ['ok', 'En ligne'], refuse: ['ko', 'Refusée'], archive: ['gris', 'Archivée'] };
+// conditions d'annulation choisies par l'hôte (agence.sql) ; le paiement se fait entre le voyageur et l'hôte
+const ANNULATION = { flexible: ['Souple', 'Annulation sans frais jusqu’à la veille de l’arrivée.'], moderee: ['Modérée', 'Annulation sans frais jusqu’à 7 jours avant l’arrivée.'],
+  stricte: ['Stricte', 'Annulation sans frais jusqu’à 30 jours avant l’arrivée.'] };
+
+// icônes au trait (navigation et actions) ; les emoji restent pour le contenu
+const ICONES = {
+  explorer: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>', services: '<path d="M14 6a4 4 0 0 0 5 5l-9 9a2.1 2.1 0 0 1-3-3l9-9a4 4 0 0 0-2-2z"/>',
+  coeur: '<path d="M12 20s-7.2-4.5-9.3-8.8C1.3 8.2 3.1 5 6.4 5c2.1 0 3.6 1.2 4.6 2.8C12 6.2 13.5 5 15.6 5c3.3 0 5.1 3.2 3.7 6.2C17.2 15.5 12 20 12 20z"/>',
+  message: '<path d="M4 5h16v11H9l-5 4z"/>', compte: '<circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/>',
+  carte: '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>', liste: '<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
+  filtre: '<path d="M4 6h16M7 12h10M10 18h4"/>', fermer: '<path d="M6 6l12 12M18 6L6 18"/>', gauche: '<path d="M15 5l-7 7 7 7"/>', droite: '<path d="M9 5l7 7-7 7"/>',
+  partage: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 11l7.6-4M8.2 13l7.6 4"/>',
+  cloche: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>', comparer: '<path d="M7 4v16M17 4v16M3 9h8M13 15h8"/>',
+  zone: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', voyageurs: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0M17 4.5a3.5 3.5 0 0 1 0 7M22 20a6 6 0 0 0-4-5.6"/>',
+  lit: '<path d="M3 18V7M3 13h18v5M21 18v-2.5A3.5 3.5 0 0 0 17.5 12H11v1"/><circle cx="7" cy="10" r="1.6"/>', bain: '<path d="M4 12h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM6 12V6.5a2.5 2.5 0 0 1 5 0"/>',
+  maison: '<path d="M3 11l9-7 9 7v9H5z"/><path d="M10 20v-6h4v6"/>', lune: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  pin: '<path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>', drapeau: '<path d="M5 21V4h11l-2 4 2 4H5"/>',
+  check: '<path d="M5 12l5 5 9-10"/>', plus: '<path d="M12 5v14M5 12h14"/>', bouclier: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
+};
+const ico = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONES[n] || ''}</svg>`;
+
+// ---------------------------------------------------------------- lieux et carte (Leaflet hébergé par le site, fonds OpenStreetMap)
+const CENTRES = { Martinique: [14.64, -61.02, 10], Guadeloupe: [16.2, -61.55, 10], Guyane: [4.93, -52.32, 9], 'Saint-Martin': [18.07, -63.06, 12], 'Saint-Barthélemy': [17.9, -62.83, 13],
+  'La Réunion': [-21.13, 55.53, 10], Mayotte: [-12.82, 45.15, 11], 'Hexagone et Corse': [46.6, 2.4, 5], 'Autre pays': [20, 0, 2] };
+// aéroports principaux (distance à vol d'oiseau affichée sur la fiche) et villes de référence
+const AEROPORTS = { Martinique: ['l’aéroport Martinique Aimé Césaire', 14.591, -61.003], Guadeloupe: ['l’aéroport Guadeloupe Pôle Caraïbes', 16.265, -61.532],
+  Guyane: ['l’aéroport Félix Éboué', 4.82, -52.36], 'La Réunion': ['l’aéroport Roland Garros', -20.887, 55.51], Mayotte: ['l’aéroport de Dzaoudzi-Pamandzi', -12.805, 45.281],
+  'Saint-Martin': ['l’aéroport de Grand-Case', 18.1, -63.048], 'Saint-Barthélemy': ['l’aéroport Rémy de Haenen', 17.904, -62.844] };
+const VILLES_REF = { Martinique: 'Fort-de-France', Guadeloupe: 'Pointe-à-Pitre', Guyane: 'Cayenne', 'La Réunion': 'Saint-Denis', Mayotte: 'Mamoudzou' };
+// nom de commune comparable : « Le Diamant » = « diamant », « Ste-Luce » = « Sainte-Luce » (même règle que kaz_norm dans agence.sql)
+const normCommune = s => String(s || '').replace(/œ/g, 'oe').replace(/Œ/g, 'OE').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  .replace(/\bste\b/g, 'sainte').replace(/\bst\b/g, 'saint').replace(/^(les|le|la|l)[ ’'-]+/, '').replace(/[^a-z0-9]/g, '');
+// commune officielle (lieux.js : nom, code INSEE, mairie, risques) ; Saint-Martin et Saint-Barthélemy n'ont qu'une commune
+function communeDe(terr, nom) {
+  const l = (typeof COMMUNES !== 'undefined' && COMMUNES[terr]) || [], n = normCommune(nom);
+  return (n && l.find(c => normCommune(c[0]) === n)) || (l.length === 1 ? l[0] : null);
+}
+// position sur la carte : le point de l'hôte (arrondi à ~300 m par la base), sinon la mairie de la commune (approximative)
+function positionDe(l) {
+  if (l.lat != null && l.lng != null) return { lat: Number(l.lat), lng: Number(l.lng), approx: false };
+  const c = communeDe(l.territoire, l.commune);
+  return c ? { lat: c[2], lng: c[3], approx: true } : null;
+}
+const distanceKm = (a, b) => { const r = x => x * Math.PI / 180, h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2; return 12742 * Math.asin(Math.sqrt(h)); };
+function chargerCarte() {
+  if (window.L) return Promise.resolve(window.L);
+  return new Promise((ok, ko) => {
+    if (!document.querySelector('link[href="lib/leaflet/leaflet.css"]')) { const c = document.createElement('link'); c.rel = 'stylesheet'; c.href = 'lib/leaflet/leaflet.css'; document.head.appendChild(c); }
+    const s = document.createElement('script'); s.src = 'lib/leaflet/leaflet.js'; s.onload = () => ok(window.L); s.onerror = ko; document.head.appendChild(s);
+  });
+}
+function fondCarte(L, el, centre, zoom, o = {}) {
+  const m = L.map(el, { scrollWheelZoom: false, ...o }).setView(centre, zoom);
+  m.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' }).addTo(m);
+  return m;
+}
+
+// petite mémoire des lectures (revenir sur une page est instantané) ; la base reste la référence
+const memoire = new Map();
+function memoK(cle, f, ms = 30000) {
+  const m = memoire.get(cle); if (m && Date.now() - m.t < ms) return m.p;
+  const p = f().catch(e => { memoire.delete(cle); throw e; }); memoire.set(cle, { t: Date.now(), p }); return p;
+}
+const oublierK = debut => { for (const k of [...memoire.keys()]) if (k.startsWith(debut)) memoire.delete(k); };
+// agence.sql installé ? (position, mentions, alertes) : sinon la carte se contente des communes et les alertes restent cachées
+let agenceP = null;
+const agenceInstallee = () => agenceP || (agenceP = PRET ? sb.from('logements').select('lat').limit(1).then(r => !r.error, () => false) : Promise.resolve(false));
+// comparateur : jusqu'à 4 logements, gardés sur cet appareil
+const compares = () => { try { return (JSON.parse(localStorage.getItem('kazComparer') || '[]') || []).filter(x => /^[0-9a-f-]{36}$/.test(x)).slice(0, 4); } catch (e) { return []; } };
+function basculerComparer(id) {
+  let l = compares();
+  if (l.includes(id)) l = l.filter(x => x !== id);
+  else if (l.length >= 4) { toast('4 logements au plus dans le comparateur : retirez-en un.', true); return; }
+  else l.push(id);
+  try { localStorage.setItem('kazComparer', JSON.stringify(l)); } catch (e) { /* stockage indisponible */ }
+  document.querySelectorAll(`[data-comparer="${id}"]`).forEach(b => b.setAttribute('aria-pressed', String(l.includes(id))));
+  barreComparer();
+  if (typeof RCH !== 'undefined' && RCH) barreRapide();   // recherche : la puce « Comparer (n) »
+}
+// barre « Comparer (n) » en bas de l'écran (fiche, favoris)
+function barreComparer() {
+  $('#compBarre')?.remove();
+  const n = compares().length, h = location.hash;
+  if (!n || !/^#\/(logement|compte\/favoris)/.test(h)) return;
+  const b = document.createElement('div'); b.id = 'compBarre'; b.className = 'comp-barre';
+  b.innerHTML = `<span>${n} logement${n > 1 ? 's' : ''} à comparer</span><a class="btn btn-p btn-s" href="#/comparer">${ico('comparer')} Comparer</a>`;
+  document.body.appendChild(b);
+}
+// pages qui laissent quelque chose derrière elles (carte, minuteries) : nettoyé au changement de page
+let aQuitter = [];
+const surDepart = f => aQuitter.push(f);
+function nettoyer() {
+  aQuitter.forEach(f => { try { f(); } catch (e) { /* page déjà partie */ } }); aQuitter = [];
+  document.body.classList.remove('page-rech', 'page-fiche', 'vue-carte', 'sans-defil');
+  document.querySelectorAll('.visionneuse, .voile, #compBarre').forEach(e => e.remove());
+}
 
 // ---------------------------------------------------------------- outils
 const $ = s => document.querySelector(s);
@@ -53,6 +150,13 @@ const champsLieu = (t, v, id, req = true, vide = '') => `<label>Territoire<selec
 const brancherLieux = () => document.querySelectorAll('select[data-villes]').forEach(s => brancherVilles(s, s.dataset.villes));
 const param = () => Object.fromEntries(new URLSearchParams((location.hash.split('?')[1] || '')));
 const aller = h => { if (location.hash === h) rendre(); else location.hash = h; };
+const s_ = n => n > 1 ? 's' : '';
+// « à » + commune, avec l'article contracté : au Diamant, aux Trois-Îlets, à la Trinité, à l’Ajoupa-Bouillon, à Fort-de-France
+const aLieu = c => { const t = String(c || '').trim(); return /^le /i.test(t) ? 'au ' + t.slice(3) : /^les /i.test(t) ? 'aux ' + t.slice(4) : /^la /i.test(t) ? 'à la ' + t.slice(3) : /^l[’']/i.test(t) ? 'à l’' + t.slice(2) : 'à ' + t; };
+const noteFr = n => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const qsDates = p => { const u = new URLSearchParams(); ['arrivee', 'depart', 'voyageurs'].forEach(k => p[k] && u.set(k, p[k])); const s = u.toString(); return s ? '?' + s : ''; };
+// bouton cœur (favoris) : sans compte, il mène à la connexion puis revient ici
+const coeurBtn = id => `<button class="coeur ${favoris.has(id) ? 'on' : ''}" data-fav="${id}" aria-pressed="${favoris.has(id)}" aria-label="${favoris.has(id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${ico('coeur')}</button>`;
 
 function toast(m, ko = false) {
   const t = document.createElement('div'); t.className = 'toast' + (ko ? ' ko' : ''); t.textContent = m; t.setAttribute('role', 'status');
@@ -98,7 +202,7 @@ async function envoyerPhotos(fichiers) {
 }
 
 // ---------------------------------------------------------------- session
-let moi = null, profil = null, contact = null, favoris = new Set(), compteurs = { resa: 0, msgs: 0 };
+let moi = null, profil = null, contact = null, favoris = new Set(), compteurs = { resa: 0, msgs: 0, notifs: 0 };
 async function chargerMoi() {
   moi = null; profil = null; contact = null; favoris = new Set();
   if (!PRET) return;
@@ -122,6 +226,8 @@ async function compter() {
     compteurs.resa = r.length + d.length;
     const m = await q(sb.from('messages').select('id').eq('lu', false).neq('de', moi.id));
     compteurs.msgs = m.length;
+    // notifications de Kaz An Nou (alertes de recherche) : celles des autres applis restent dans leur cloche
+    compteurs.notifs = (await sb.from('notifs').select('id').eq('lu', false).ilike('lien', 'https://immo.ilo-tech.com/%')).data?.length || 0;
     nav();
   } catch (e) { /* compteurs facultatifs */ }
 }
@@ -130,60 +236,89 @@ async function compter() {
 function nav() {
   const h = location.hash || '#/';
   const b = n => n ? `<span class="badge">${n}</span>` : '';
-  const on = p => h.startsWith(p) ? 'on' : '';
+  const on = (...p) => p.some(x => h.startsWith(x));
+  const cls = (...p) => on(...p) ? 'class="on" aria-current="page"' : '';
   $('#nav').innerHTML = `
-    <a href="#/" class="${h === '#/' || h === '' ? 'on' : ''}">Séjours</a>
-    <a href="#/services" class="${on('#/services')}">Services maison</a>
-    <a href="#/retour">Retour au pays</a>
-    ${moi ? `<a href="#/compte" class="${on('#/compte')}">Mon espace${b(compteurs.resa + compteurs.msgs)}</a>`
-          : `<a href="#/connexion" class="${on('#/connexion')}">Connexion</a><a class="btn btn-p btn-s" href="#/inscription">Créer un compte</a>`}`;
-  $('#bas').innerHTML = `
-    <a href="#/" class="${h === '#/' || h === '' ? 'on' : ''}"><span>🔎</span>Explorer</a>
-    <a href="#/services" class="${on('#/services')}"><span>🧹</span>Services</a>
-    <a href="#/compte/favoris" class="${on('#/compte/favoris')}"><span>♡</span>Favoris</a>
-    <a href="#/compte/messages" class="${on('#/compte/messages')}"><span>💬</span>Messages${b(compteurs.msgs)}</a>
-    <a href="${moi ? '#/compte' : '#/connexion'}" class="${h === '#/compte' || on('#/connexion')}"><span>👤</span>${moi ? 'Compte' : 'Connexion'}${b(compteurs.resa)}</a>`;
+    <a href="#/recherche" ${cls('#/recherche', '#/logement', '#/comparer')}>Séjours</a>
+    <a href="#/services" ${cls('#/services', '#/prestation')}>Services maison</a>
+    <a href="#/proprietaires" ${cls('#/proprietaires')}>Propriétaires</a>
+    <a href="#/retour" ${cls('#/retour')}>Retour au pays</a>
+    ${moi ? `<a href="#/compte" ${cls('#/compte', '#/conversation', '#/avis')}>Mon espace${b(compteurs.resa + compteurs.msgs + compteurs.notifs)}</a>`
+          : `<a href="#/connexion" ${cls('#/connexion')}>Connexion</a><a class="btn btn-p btn-s" href="#/inscription">Créer un compte</a>`}`;
+  const compteOn = (h.startsWith('#/compte') && !on('#/compte/favoris', '#/compte/messages')) || on('#/connexion', '#/inscription', '#/avis');
+  const liens = [['#/', 'explorer', 'Explorer', 0, h === '#/' || on('#/?', '#/recherche', '#/logement', '#/proprietaires', '#/retour')],
+    ['#/services', 'services', 'Services', 0, on('#/services', '#/prestation')], ['#/compte/favoris', 'coeur', 'Favoris', 0, on('#/compte/favoris', '#/comparer')],
+    ['#/compte/messages', 'message', 'Messages', compteurs.msgs, on('#/compte/messages', '#/conversation')],
+    [moi ? '#/compte' : '#/connexion', 'compte', moi ? 'Compte' : 'Connexion', compteurs.resa + compteurs.notifs, compteOn]];
+  $('#bas').innerHTML = liens.map(([href, i, t, n, actif]) => `<a href="${href}" ${actif ? 'class="on" aria-current="page"' : ''}>${ico(i)}${t}${b(n)}</a>`).join('');
 }
-const vue = html => { $('#app').innerHTML = html; };
-const chargement = () => vue('<div class="chargement">Chargement…</div>');
+// une page qui répond après qu'on l'a quittée n'écrase pas la suivante (les filtres de la recherche ne changent que la fin de l'adresse)
+let pageEnCours = null;
+const vue = html => { if (pageEnCours !== null && (location.hash || '#/').split('?')[0] !== pageEnCours.split('?')[0]) return; $('#app').innerHTML = html; };
+const chargement = () => vue('<div class="chargement" aria-busy="true">Chargement…</div>');
 const exigeCompte = () => { if (moi) return true; aller('#/connexion?retour=' + encodeURIComponent(location.hash)); return false; };
+const erreurEtat = e => `<div class="vide-etat erreur-etat" role="alert"><div class="ico">📡</div><h3>Le chargement n’a pas abouti</h3><p class="muted">${esc(erreur(e))}</p><button class="btn btn-p" data-reessayer>Réessayer</button></div>`;
 
-// carte d'un logement dans une grille
-function carteLogement(l, notes) {
+// carte d'un logement dans une grille (accueil, favoris) : toute la carte mène à la fiche, le cœur et « Comparer » restent des boutons
+function carteLogement(l, notes, avecComparer = false) {
   const n = notes?.[l.id];
-  return `<a class="carte" href="#/logement/${l.id}">
-    <div class="ph">${l.photos?.[0] ? `<img src="${esc(photo(l.photos[0]))}" alt="${esc(l.titre)}" loading="lazy">` : '<span class="vide">🏝️</span>'}</div>
-    ${moi ? `<button class="coeur ${favoris.has(l.id) ? 'on' : ''}" data-fav="${l.id}" aria-label="Favori">${favoris.has(l.id) ? '♥' : '♡'}</button>` : ''}
-    <div class="corps"><div class="l1"><span>${lieu(l)}</span>${n ? `<span class="etoile">★ ${n.moyenne} (${n.nombre})</span>` : '<span class="tag">Nouveau</span>'}</div>
-      <div class="muted">${esc(l.titre)}</div>
+  return `<article class="carte">
+    <div class="ph">${l.photos?.[0] ? `<img src="${esc(photo(l.photos[0]))}" alt="" loading="lazy">` : '<span class="vide" aria-hidden="true">🏝️</span>'}</div>
+    ${coeurBtn(l.id)}
+    <div class="corps"><div class="l1"><span>${lieu(l)}</span>${n ? `<span class="etoile">★ ${noteFr(n.moyenne)} (${n.nombre})</span>` : '<span class="tag">Nouveau</span>'}</div>
+      <h3 class="carte-t"><a href="#/logement/${l.id}">${esc(l.titre)}</a></h3>
       <div class="muted petit">${esc(TYPES[l.type] || '')} · ${l.chambres} ch. · ${l.voyageurs} voyageurs</div>
-      <div class="prix"><b>${eur(l.prix_nuit)}</b> <span class="muted">/ nuit</span></div></div></a>`;
+      <div class="prix"><b>${eur(l.prix_nuit)}</b> <span class="muted">/ nuit</span></div>
+      ${avecComparer ? `<button class="lien comp-l" data-comparer="${l.id}" aria-pressed="${compares().includes(l.id)}">${ico('comparer')} Comparer</button>` : ''}</div></article>`;
 }
 async function notesDe(ids) {
   if (!ids.length) return {};
   const n = await q(sb.from('notes').select('*').in('cible', ids));
   return Object.fromEntries(n.map(x => [x.cible, x]));
 }
+// actions communes à toutes les pages : favoris, comparateur, ancres de section, « Réessayer »
 document.addEventListener('click', async ev => {
+  const an = ev.target.closest('[data-ancre]');
+  if (an) {
+    ev.preventDefault();
+    const cible = document.getElementById(an.dataset.ancre);
+    if (cible) { cible.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); cible.setAttribute('tabindex', '-1'); cible.focus({ preventScroll: true }); }
+    return;
+  }
+  if (ev.target.closest('[data-reessayer]')) { oublierK(''); return rendre(); }
+  const c = ev.target.closest('[data-comparer]');
+  if (c) { ev.preventDefault(); ev.stopPropagation(); return basculerComparer(c.dataset.comparer); }
   const f = ev.target.closest('[data-fav]');
   if (!f) return;
   ev.preventDefault(); ev.stopPropagation();
+  if (!exigeCompte()) return;
   const id = f.dataset.fav;
   try {
     if (favoris.has(id)) { await q(sb.from('favoris').delete().eq('logement_id', id)); favoris.delete(id); }
     else { await q(sb.from('favoris').insert({ logement_id: id })); favoris.add(id); }
-    f.classList.toggle('on', favoris.has(id)); f.textContent = favoris.has(id) ? '♥' : '♡';
+    const on = favoris.has(id);
+    document.querySelectorAll(`[data-fav="${id}"]`).forEach(b => {
+      b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+      if (b.classList.contains('coeur')) b.setAttribute('aria-label', on ? 'Retirer des favoris' : 'Ajouter aux favoris');
+      const t = b.querySelector('span'); if (t) t.textContent = on ? 'Enregistré' : 'Enregistrer';
+    });
+    toast(on ? 'Ajouté à vos favoris.' : 'Retiré de vos favoris.');
   } catch (e) { toast(erreur(e), true); }
 });
 
-// ---------------------------------------------------------------- accueil et recherche
+// ---------------------------------------------------------------- accueil
+const RAPIDES = [['eq=vue_mer', '🌊', 'Vue mer'], ['eq=piscine', '🏊', 'Piscine'], ['eq=plage', '🏖️', 'Plage à pied'], ['types=villa', '🏡', 'Villas'], ['types=gite', '🌿', 'Gîtes'],
+  ['types=appartement', '🏢', 'Appartements'], ['types=bungalow', '🛖', 'Bungalows'], ['eq=starlink', '🛰️', 'Starlink'], ['eq=animaux', '🐾', 'Animaux acceptés'], ['eq=pmr', '♿', 'Accessible PMR']];
+const ONGLETS = on => `<nav class="onglets" aria-label="Kaz An Nou">${[['#/', '🏝️ Séjours'], ['#/services', '🧹 Services maison'], ['#/proprietaires', '🔑 Propriétaires'], ['#/retour', '✈️ Retour au pays']]
+  .map(([h, t]) => `<a href="${h}" ${h === on ? 'class="on" aria-current="page"' : ''}>${t}</a>`).join('')}</nav>`;
 function barreRecherche(p = {}) {
-  return `<form class="recherche" id="fRech">
-    <label><span>Où</span><select name="territoire" aria-label="Territoire">${optsTerritoires(p.territoire || '', 'Tous les territoires')}</select><input name="commune" list="villesR" placeholder="Ville (facultatif)" value="${esc(p.commune || '')}" aria-label="Ville" style="font-size:13px">${listeVilles('villesR', p.territoire)}</label>
+  const t = p.territoire ?? 'Martinique';
+  return `<form class="recherche" id="fRech" role="search" aria-label="Rechercher un séjour">
+    <label><span>Où</span><span class="ou"><select name="territoire" aria-label="Territoire">${optsTerritoires(t, 'Tous les territoires')}</select><input name="commune" list="villesR" placeholder="Ville (facultatif)" value="${esc(p.commune || '')}" aria-label="Ville" autocomplete="off"></span>${listeVilles('villesR', t)}</label>
     <label><span>Arrivée</span><input type="date" name="arrivee" min="${auj()}" value="${esc(p.arrivee || '')}"></label>
     <label><span>Départ</span><input type="date" name="depart" min="${auj()}" value="${esc(p.depart || '')}"></label>
-    <label><span>Voyageurs</span><input type="number" name="voyageurs" min="1" max="40" value="${esc(p.voyageurs || 2)}"></label>
-    <button class="btn btn-p">🔎 Rechercher</button></form>`;
+    <label><span>Voyageurs</span><input type="number" name="voyageurs" min="1" max="40" inputmode="numeric" value="${esc(p.voyageurs || 2)}"></label>
+    <button class="btn btn-p">${ico('explorer')} Rechercher</button></form>`;
 }
 function brancherRecherche() {
   const t = document.querySelector('#fRech [name=territoire]'); if (t) brancherVilles(t, 'villesR');
@@ -195,79 +330,51 @@ function brancherRecherche() {
     aller('#/recherche?' + p);
   });
 }
-
 async function pageAccueil() {
   vue(`
     <section class="hero"><div class="wrap">
-      <div class="onglets"><a class="on" href="#/">🏝️ Séjours</a><a href="#/services">🧹 Services pour la maison</a><a href="#/retour">✈️ Retour au pays</a></div>
-      <h1>Votre kaz, <em>réservée en confiance</em>.</h1>
-      <p>Martinique, Guadeloupe, Guyane, La Réunion, Hexagone et ailleurs : villas, gîtes et appartements de propriétaires vérifiés, et des prestataires de confiance pour le ménage, l’accueil, le jardin ou la piscine.</p>
+      ${ONGLETS('#/')}
+      <h1>Votre kaz en Martinique, <em>réservée en confiance</em>.</h1>
+      <p>Villas, gîtes et appartements de propriétaires vérifiés, posés sur une carte avec leurs vrais prix et leurs vrais avis. La Martinique d’abord, puis les Antilles et partout où vivent les nôtres.</p>
       ${barreRecherche()}
+      <div class="apres"><a href="#/recherche">${ico('carte')} Explorer la carte des logements</a><a href="#/proprietaires">Propriétaire ? Estimez vos revenus</a></div>
     </div></section>
     <div class="wrap">
-      <div class="puces" id="puces">${[['', '✨', 'Tout'], ['vue_mer', '🌊', 'Vue mer'], ['piscine', '🏊', 'Piscine'], ['plage', '🏖️', 'Plage à pied'], ['villa', '🏡', 'Villas'], ['gite', '🌿', 'Gîtes'], ['appartement', '🏢', 'Appartements'], ['bungalow', '🛖', 'Bungalows'], ['starlink', '🛰️', 'Starlink'], ['animaux', '🐾', 'Animaux acceptés']]
-        .map(([k, i, t]) => `<button data-filtre="${k}" class="${k ? '' : 'on'}">${i} ${t}</button>`).join('')}</div>
-      <section class="section"><div class="titre-s"><h2>Logements à découvrir</h2><a href="#/recherche">Tout voir →</a></div><div id="liste" class="chargement">Chargement…</div></section>
-      <section class="section"><div class="titre-s"><h2>Des services pour votre maison</h2><a href="#/services">Tous les services →</a></div>
-        <div class="cats">${Object.entries(CATS).map(([k, [i, t]]) => `<a class="cat" href="#/services/${k}"><span class="ico">${i}</span><b>${esc(t)}</b></a>`).join('')}</div></section>
+      <nav class="puces" aria-label="Recherches rapides">${RAPIDES.map(([q2, i, t]) => `<a class="puce" href="#/recherche?${q2}">${i} ${t}</a>`).join('')}</nav>
+      <section class="section" aria-labelledby="tDecouvrir"><div class="titre-s"><h2 id="tDecouvrir">Logements à découvrir</h2><a href="#/recherche">Tout voir sur la carte →</a></div>
+        <div id="liste" class="grille" aria-busy="true">${'<i class="sq" style="height:300px"></i>'.repeat(4)}</div></section>
+      <section class="section" aria-labelledby="tOutils"><div class="titre-s"><h2 id="tOutils">Toute l’agence dans votre poche</h2></div><div class="outils" id="outils">
+        ${[['#/recherche', '🗺️', 'Recherche sur la carte', 'Les prix posés sur la carte, commune par commune, et la recherche dans une zone.'],
+           ['#/comparer', '⚖️', 'Comparateur', 'Jusqu’à 4 logements côte à côte : prix, couchages, équipements.'],
+           ['#/proprietaires', '📈', 'Simulateur de revenus', 'Ce que rapporterait votre logement en location saisonnière, et vos obligations.'],
+           ['#/retour', '✈️', 'Retour au pays', 'Visite vidéo, internet et logement prêts avant votre arrivée.']]
+          .map(([h, i, t, d]) => `<a class="outil" href="${h}"><span class="ico" aria-hidden="true">${i}</span><span><b>${t}</b><span>${d}</span></span></a>`).join('')}</div></section>
+      <section class="section" aria-labelledby="tServices"><div class="titre-s"><h2 id="tServices">Des services pour votre maison</h2><a href="#/services">Tous les services →</a></div>
+        <div class="cats">${Object.entries(CATS).map(([k, [i, t]]) => `<a class="cat" href="#/services/${k}"><span class="ico" aria-hidden="true">${i}</span><b>${esc(t)}</b></a>`).join('')}</div></section>
+      <section class="section" aria-labelledby="tConfiance"><h2 id="tConfiance">En confiance, de la recherche au séjour</h2><div class="confiance">
+        ${[['🛡️', 'Hôtes vérifiés', 'Notre équipe vérifie chaque propriétaire et chaque annonce avant la mise en ligne.'], ['★', 'Avis vérifiés', 'Seuls les voyageurs qui ont séjourné peuvent laisser un avis, publié avec sa date.'],
+           ['🤝', 'Rien à payer en ligne', 'L’hôte confirme d’abord ; vous réglez ensuite avec lui, comme convenu.'], ['📍', 'Une équipe en Martinique', 'IloTech, au Robert. Une question ? WhatsApp au 0696 48 26 78.']]
+          .map(([i, t, d]) => `<div><span aria-hidden="true">${i}</span><span><b>${t}</b><span>${d}</span></span></div>`).join('')}</div></section>
       <section class="section"><div class="appel"><div><h2>Propriétaire ou prestataire ?</h2><p>Publiez votre logement ou vos services gratuitement. Nous vérifions chaque partenaire avant sa mise en ligne.</p></div>
         <a class="btn btn-p" href="${moi ? '#/compte/partenaire' : '#/inscription?partenaire=1'}">Devenir partenaire</a></div></section>
       <section class="section"><div class="appel" style="background:linear-gradient(135deg,#1e3a5f,#4f46e5)"><div><h2>Visite virtuelle 3D, photos, drone</h2><p>Faites visiter votre bien depuis un téléphone, avant même le premier déplacement. Par IloTech.</p></div>
         <a class="btn btn-p" href="offres.html#visite-3d">Essayer la visite 3D</a></div></section>
     </div>`);
   brancherRecherche();
-  let filtre = '';
-  const charger = async () => {
-    try {
-      let r = sb.from('logements').select('*').eq('statut', 'publie').order('created_at', { ascending: false }).limit(24);
-      if (filtre && TYPES[filtre]) r = r.eq('type', filtre); else if (filtre) r = r.contains('equipements', [filtre]);
-      const l = await q(r), n = await notesDe(l.map(x => x.id));
-      $('#liste').className = l.length ? 'grille' : '';
-      $('#liste').innerHTML = l.length ? l.map(x => carteLogement(x, n)).join('') : videLogements();
-    } catch (e) { $('#liste').innerHTML = `<p class="muted">${esc(erreur(e))}</p>`; }
-  };
-  $('#puces').addEventListener('click', e => {
-    const b = e.target.closest('[data-filtre]'); if (!b) return;
-    document.querySelectorAll('#puces button').forEach(x => x.classList.toggle('on', x === b)); filtre = b.dataset.filtre; charger();
-  });
-  if (PRET) charger(); else $('#liste').innerHTML = videLogements();
+  agenceInstallee().then(ok => { if (ok && $('#outils')) $('#outils').insertAdjacentHTML('beforeend', `<a class="outil" href="#/compte/alertes"><span class="ico" aria-hidden="true">🔔</span><span><b>Alertes</b><span>Prévenu dans votre espace dès qu’un logement correspond à vos critères.</span></span></a>`); });
+  if (!PRET) { $('#liste').outerHTML = videLogements(); return; }
+  try {
+    const l = await q(sb.from('logements').select('*').eq('statut', 'publie').order('created_at', { ascending: false }).limit(8)), n = await notesDe(l.map(x => x.id));
+    const el = $('#liste'); if (!el) return;
+    el.removeAttribute('aria-busy'); el.className = l.length ? 'grille' : ''; el.innerHTML = l.length ? l.map(x => carteLogement(x, n)).join('') : videLogements();
+  } catch (e) { if ($('#liste')) { $('#liste').className = ''; $('#liste').innerHTML = erreurEtat(e); } }
 }
 const videLogements = () => `<div class="vide-etat"><div class="ico">🏝️</div><h3>Les premiers logements arrivent</h3>
   <p class="muted">Nous vérifions les premières annonces des propriétaires. Vous avez un logement, aux Antilles ou ailleurs ? Publiez-le gratuitement.</p>
   <a class="btn btn-p" href="${moi ? '#/compte/partenaire' : '#/inscription?partenaire=1'}">Publier mon logement</a></div>`;
 
-async function pageRecherche() {
-  const p = param();
-  vue(`<div class="wrap" style="padding-top:22px">${barreRecherche(p)}
-    <div class="puces"><label class="petit">Trier : <select id="tri"><option value="recent">Plus récents</option><option value="prix">Prix croissant</option><option value="prix_desc">Prix décroissant</option></select></label>
-      <label class="petit">Type : <select id="type"><option value="">Tous</option>${opts(TYPES, p.type)}</select></label>
-      <label class="petit">Prix max / nuit : <input id="pmax" type="number" min="0" step="10" style="width:90px" value="${esc(p.pmax || '')}"></label></div>
-    <div id="liste" class="chargement" style="margin-top:14px">Recherche…</div></div>`);
-  brancherRecherche();
-  const charger = async () => {
-    try {
-      let r = sb.from('logements').select('*').eq('statut', 'publie');
-      if (p.territoire) r = r.eq('territoire', p.territoire);
-      if (p.commune) r = r.ilike('commune', `%${p.commune.replace(/[%_*,()]/g, '')}%`);
-      if (p.voyageurs) r = r.gte('voyageurs', Number(p.voyageurs));
-      const type = $('#type').value, pmax = Number($('#pmax').value), tri = $('#tri').value;
-      if (type) r = r.eq('type', type);
-      if (pmax) r = r.lte('prix_nuit', pmax);
-      r = tri === 'recent' ? r.order('created_at', { ascending: false }) : r.order('prix_nuit', { ascending: tri === 'prix' });
-      let l = await q(r.limit(60));
-      if (p.arrivee && p.depart) { const libres = new Set(await q(sb.rpc('logements_libres', { d1: p.arrivee, d2: p.depart }))); l = l.filter(x => libres.has(x.id)); }
-      const n = await notesDe(l.map(x => x.id));
-      $('#liste').className = l.length ? 'grille' : '';
-      $('#liste').innerHTML = `<p class="muted" style="grid-column:1/-1">${l.length} logement${l.length > 1 ? 's' : ''}${p.commune ? ' à ' + esc(p.commune) : p.territoire ? ' · ' + esc(p.territoire) : ''}${p.arrivee && p.depart ? ' libres du ' + jour(p.arrivee) + ' au ' + jour(p.depart) : ''}</p>` +
-        (l.length ? l.map(x => carteLogement(x, n)).join('') : '<div class="vide-etat" style="grid-column:1/-1"><div class="ico">🔎</div><h3>Aucun logement pour ces critères</h3><p class="muted">Essayez d’autres dates ou un autre territoire.</p></div>');
-    } catch (e) { $('#liste').innerHTML = `<p class="muted">${esc(erreur(e))}</p>`; }
-  };
-  ['#tri', '#type', '#pmax'].forEach(s => $(s).addEventListener('change', charger));
-  if (PRET) charger(); else $('#liste').innerHTML = videLogements();
-}
-
 // ---------------------------------------------------------------- fiche logement
-function calendrier(prises, debut, fin) {
+function calendrier(prises, debut, fin, decal = 0) {
   const occupe = d => prises.some(p => d >= p.debut && d < p.fin);
   const mois = k => {
     const m = new Date(); m.setDate(1); m.setMonth(m.getMonth() + k);
@@ -276,77 +383,168 @@ function calendrier(prises, debut, fin) {
     for (let j = 1; j <= n; j++) {
       const d = `${an}-${String(mo + 1).padStart(2, '0')}-${String(j).padStart(2, '0')}`;
       const c = d < auj() ? 'passe' : occupe(d) ? 'pris' : debut && fin && d >= debut && d < fin ? 'choisi' : '';
-      h += `<span class="${c}" title="${occupe(d) ? 'Indisponible' : ''}">${j}</span>`;
+      h += `<span class="${c}">${j}${c === 'pris' ? '<span class="sr"> (réservé)</span>' : ''}</span>`;
     }
     return `<div class="mois"><b>${m.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</b><div class="jours">${h}</div></div>`;
   };
-  return `<div class="cal">${mois(0)}${mois(1)}</div>`;
+  return `<div class="cal-nav"><button type="button" class="rond" data-cal="-1" aria-label="Mois précédents" ${decal <= 0 ? 'disabled' : ''}>${ico('gauche')}</button>
+    <span class="muted petit">Les dates barrées sont déjà réservées.</span>
+    <button type="button" class="rond" data-cal="1" aria-label="Mois suivants" ${decal >= 10 ? 'disabled' : ''}>${ico('droite')}</button></div><div class="cal">${mois(decal)}${mois(decal + 1)}</div>`;
+}
+// photos : mosaïque sur ordinateur, défilement au doigt avec compteur sur téléphone ; chaque photo s'agrandit
+function galerie(l, ph) {
+  const n = Math.max(1, Math.min(ph.length, 5));
+  return `<div class="galerie-z"><div class="galerie g${n}" id="galerie">${(ph.length ? ph : [null]).map((p, i) => p
+      ? `<button type="button" class="ph-b" data-zoom="${i}" aria-label="Agrandir la photo ${i + 1} sur ${ph.length}"><img src="${esc(photo(p))}" alt="" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}></button>`
+      : '<div><span class="vide" aria-hidden="true">🏝️</span></div>').join('')}</div>
+    ${ph.length > 1 ? `<span class="compteur" id="compteurPh" aria-hidden="true">1 / ${ph.length}</span>` : ''}
+    ${ph.length > 5 ? `<button type="button" class="btn btn-s tout-voir" data-zoom="0">Voir les ${ph.length} photos</button>` : ''}</div>`;
+}
+// risques naturels de la commune (lieux.js, données de l'État) et liens officiels
+const RISQUES_TXT = { i: ['🌊', 'Inondation'], m: ['⛰️', 'Mouvement de terrain'], s: ['📳', 'Séisme'], v: ['🌋', 'Éruption volcanique'], c: ['🌀', 'Cyclone'], f: ['🔥', 'Feu de forêt'],
+  n: ['🏭', 'Risque industriel'], d: ['🚚', 'Transport de matières dangereuses'], b: ['💧', 'Rupture de barrage'], r: ['☢️', 'Radon'], k: ['⛏️', 'Risque minier'], g: ['💣', 'Engins de guerre'] };
+const ZONES_SISMIQUES = { 1: 'très faible', 2: 'faible', 3: 'modérée', 4: 'moyenne', 5: 'forte' };
+const VIGILANCE = { Martinique: 'https://meteofrance.mq/fr/vigilance', Guadeloupe: 'https://meteofrance.gp/fr/vigilance', 'Saint-Martin': 'https://meteofrance.gp/fr/vigilance',
+  'Saint-Barthélemy': 'https://meteofrance.gp/fr/vigilance', Guyane: 'https://meteofrance.gf/fr/vigilance', 'La Réunion': 'https://meteofrance.re/fr/cyclone', Mayotte: 'https://meteofrance.yt/fr' };
+const VOLCANS = { Martinique: ['la montagne Pelée', 'https://www.ipgp.fr/observation/ovs/ovsm/', 'OVSM-IPGP'], Guadeloupe: ['la Soufrière', 'https://www.ipgp.fr/observation/ovs/ovsg/', 'OVSG-IPGP'],
+  'La Réunion': ['le Piton de la Fournaise', 'https://www.ipgp.fr/observation/ovs/ovpf/', 'OVPF-IPGP'] };
+const SAISON_CYCLONES = { Martinique: 'du 1er juin au 30 novembre', Guadeloupe: 'du 1er juin au 30 novembre', 'Saint-Martin': 'du 1er juin au 30 novembre', 'Saint-Barthélemy': 'du 1er juin au 30 novembre',
+  'La Réunion': 'de novembre à avril', Mayotte: 'de novembre à avril' };
+const MENTION_RISQUES = '<p class="petit">Les informations sur les risques auxquels ce bien est exposé sont disponibles sur le site Géorisques : <a href="https://www.georisques.gouv.fr/" target="_blank" rel="noopener">www.georisques.gouv.fr</a>.</p>';
+function blocRisques(l, c) {
+  if (!c) return `<div class="risques"><h3>Risques naturels</h3>${MENTION_RISQUES}</div>`;
+  const rapport = `https://www.georisques.gouv.fr/mes-risques/connaitre-les-risques-pres-de-chez-moi/rapport2?form-commune=true&codeInsee=${c[1]}&ign=false&CGU-commune=on&commune=${encodeURIComponent(c[0])}`;
+  const r = [...c[7]].map(k => RISQUES_TXT[k]).filter(Boolean), v = VOLCANS[l.territoire], vig = VIGILANCE[l.territoire], s = SAISON_CYCLONES[l.territoire];
+  return `<div class="risques" id="risques"><h3>Risques naturels ${esc(aLieu(c[0]))}</h3>
+    <p class="muted petit">Recensés par l’État (Géorisques), données du ${jourLong(LIEUX_MAJ)}.</p>
+    ${r.length ? `<ul>${r.map(([i, t]) => `<li><span aria-hidden="true">${i}</span> ${t}${t === 'Séisme' && c[5] ? ` · zone ${c[5]} (${ZONES_SISMIQUES[c[5]]})` : ''}</li>`).join('')}</ul>` : ''}
+    ${c[6] ? `<p>${c[6]} arrêté${s_(c[6])} de catastrophe naturelle dans la commune depuis 1982.</p>` : ''}
+    ${c[7].includes('c') && s ? `<p><span aria-hidden="true">🌀</span> Saison des cyclones : ${s}. En cas d’alerte, suivez la vigilance de Météo-France et les consignes de votre hôte.</p>` : ''}
+    <div class="liens-off"><a href="${rapport}" target="_blank" rel="noopener">Rapport Géorisques de la commune ↗</a>${vig ? `<a href="${vig}" target="_blank" rel="noopener">Vigilance Météo-France ↗</a>` : ''}${v && c[7].includes('v') ? `<a href="${v[1]}" target="_blank" rel="noopener">Surveillance de ${v[0]} (${v[2]}) ↗</a>` : ''}</div>
+    ${MENTION_RISQUES}</div>`;
+}
+function blocEmplacement(l) {
+  const pos = positionDe(l), c = communeDe(l.territoire, l.commune), dist = [];
+  if (pos) {
+    const a = AEROPORTS[l.territoire], km = d => d < 1 ? 'moins de 1 km' : `${Math.round(d)} km`;
+    if (a) dist.push(`<span aria-hidden="true">✈️</span> À ${km(distanceKm(pos, { lat: a[1], lng: a[2] }))} de ${a[0]}`);
+    const vr = VILLES_REF[l.territoire] && communeDe(l.territoire, VILLES_REF[l.territoire]);
+    if (vr && normCommune(vr[0]) !== normCommune(l.commune)) dist.push(`<span aria-hidden="true">🏙️</span> À ${km(distanceKm(pos, { lat: vr[2], lng: vr[3] }))} de ${esc(vr[0])}`);
+  }
+  const txt = !pos ? `Le logement se trouve ${esc(aLieu(l.commune))} (${esc(l.territoire)}).` : pos.approx ? `Le logement se trouve ${esc(aLieu(l.commune))} : la carte montre la commune, pas le logement.` : 'La carte montre le quartier, à environ 300 m près.';
+  return `<section id="emplacement" class="bloc"><h2>Emplacement</h2>
+    <p>${txt} L’adresse exacte vous est donnée par l’hôte une fois le séjour confirmé.</p>
+    ${pos ? '<div class="mini-carte" id="miniCarte" role="img" aria-label="Carte de l’emplacement approximatif du logement"></div>' : ''}
+    ${dist.length ? `<ul class="distances">${dist.map(d => `<li>${d} <span class="muted">(à vol d’oiseau)</span></li>`).join('')}</ul>` : ''}
+    ${blocRisques(l, c)}</section>`;
+}
+const MOTIFS_SIG = { faux: 'Annonce fausse ou trompeuse', arnaque: 'Arnaque ou demande de paiement suspecte', illegal: 'Contenu illégal', danger: 'Logement dangereux ou insalubre',
+  harcelement: 'Harcèlement ou propos insultants', choquant: 'Contenu choquant', droits: 'Photos ou textes copiés (droits d’auteur)', autre: 'Autre motif' };
+// « Signaler » (règlement européen sur les services numériques) : commun/signalements.sql, traité dans ILO CONTROL
+function signalerLogement(l) {
+  if (!exigeCompte()) return;
+  const d = document.createElement('dialog'); d.className = 'feuille'; d.setAttribute('aria-labelledby', 'tSig');
+  d.innerHTML = `<form method="dialog" id="fSig"><div class="feuille-tete"><h2 id="tSig" tabindex="-1" autofocus>Signaler cette annonce</h2><button type="button" class="rond" data-fermer aria-label="Fermer">${ico('fermer')}</button></div>
+    <div class="feuille-corps"><p class="muted">Notre équipe examine chaque signalement et vous donne sa décision dans votre compte. En cas d’urgence, appelez le 17 ou le 112.</p>
+      <div class="f"><label>Motif<select name="motif" required>${opts(MOTIFS_SIG, 'faux')}</select></label>
+      <label>Ce qui ne va pas<textarea name="details" maxlength="1000" required minlength="10" placeholder="Décrivez le problème en quelques mots."></textarea></label></div></div>
+    <div class="feuille-pied"><button type="button" class="lien" data-fermer>Annuler</button><button class="btn btn-p" value="envoyer">Envoyer le signalement</button></div></form>`;
+  document.body.appendChild(d); d.showModal();
+  d.addEventListener('close', () => d.remove());
+  d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-fermer]')) d.close(); });
+  d.querySelector('form').addEventListener('submit', async e => {
+    e.preventDefault(); const f = e.target, b = f.querySelector('.btn-p'); b.disabled = true;
+    try { await q(sb.rpc('signaler', { app: 'kaz', univ: 'living', type_objet: 'logement', objet: l.id, motif_s: f.motif.value, texte: f.details.value.trim() })); d.close(); toast('Merci : votre signalement est envoyé à l’équipe.'); }
+    catch (err) { toast(erreur(err), true); b.disabled = false; }
+  });
 }
 
 async function pageLogement(id) {
-  chargement();
+  document.body.classList.add('page-fiche');
+  vue(`<div class="wrap fiche-tete" aria-busy="true" aria-label="Chargement de l’annonce"><i class="sq sq-t"></i><i class="sq" style="height:clamp(260px,40vw,428px);margin:16px 0;border-radius:24px"></i><i class="sq sq-l"></i><i class="sq sq-l" style="width:60%"></i></div>`);
   try {
     const l = await q(sb.from('logements').select('*').eq('id', id).maybeSingle());
-    if (!l) return vue('<div class="wrap vide-etat" style="margin-top:30px"><h3>Logement introuvable</h3><a href="#/">Retour à l’accueil</a></div>');
+    if (!l) return vue('<div class="wrap"><div class="vide-etat" style="margin-top:30px"><div class="ico">🏝️</div><h3>Logement introuvable</h3><p class="muted">Il a peut-être été retiré de la location.</p><a class="btn btn-p" href="#/recherche">Voir les logements</a></div></div>');
     const [hote, prises, avis, n] = await Promise.all([
       q(sb.from('profiles').select('id, prenom, created_at, avatar, valide, bio').eq('id', l.owner).maybeSingle()),
       q(sb.rpc('dates_prises', { lid: id })),
       q(sb.from('avis').select('note, texte, created_at').eq('logement_id', id).order('created_at', { ascending: false }).limit(20)),
       notesDe([id])]);
-    const p = param(), ph = l.photos || [];
-    const note = n[id];
+    const p = param(), ph = l.photos || [], note = n[id], eqs = EQUIP.filter(e => (l.equipements || []).includes(e[0]));
+    const prenomH = esc(hote?.prenom || 'le propriétaire'), long = (l.description || '').length > 650;
     document.title = `${l.titre} — ${l.commune} | Kaz An Nou`;
-    vue(`<div class="wrap" style="padding-top:20px">
-      <a href="javascript:history.back()" class="petit">← Retour</a>
-      <h1 style="margin-top:8px">${esc(l.titre)}</h1>
-      <div class="specs"><span>📍 ${l.quartier ? esc(l.quartier) + ', ' : ''}${lieu(l)}</span>${note ? `<span class="etoile">★ ${note.moyenne} · ${note.nombre} avis</span>` : '<span class="tag">Nouveau</span>'}
-        ${moi ? `<button class="lien" data-fav="${l.id}">${favoris.has(l.id) ? '♥ Dans vos favoris' : '♡ Ajouter aux favoris'}</button>` : ''}
-        ${l.statut !== 'publie' ? tag(ST_ANN[l.statut]) : ''}</div>
-      <div class="galerie g${Math.max(1, Math.min(ph.length, 5))}">${(ph.length ? ph.slice(0, 5) : [null]).map((p, i) => `<div>${p ? `<img src="${esc(photo(p))}" alt="Photo ${i + 1} : ${esc(l.titre)}" data-zoom="${i}" ${i ? 'loading="lazy"' : ''}>` : ''}</div>`).join('')}${ph.length > 5 ? `<button class="btn btn-s" data-zoom="0" style="position:absolute;right:14px;bottom:14px">Voir les ${ph.length} photos</button>` : ''}</div>
-      <div class="fiche"><div>
-        <h2 style="font-size:22px">${esc(TYPES[l.type])} · ${lieu(l)}</h2>
-        <div class="specs"><span>👥 ${l.voyageurs} voyageurs</span><span>🛏️ ${l.chambres} chambre${l.chambres > 1 ? 's' : ''} · ${l.lits} lit${l.lits > 1 ? 's' : ''}</span><span>🛁 ${l.sdb} salle${l.sdb > 1 ? 's' : ''} d’eau</span></div>
+    const faits = [['maison', esc(TYPES[l.type] || 'Logement')], ['voyageurs', `${l.voyageurs} voyageur${s_(l.voyageurs)}`], ['lit', `${l.chambres ? `${l.chambres} chambre${s_(l.chambres)}` : 'Pièce unique'} · ${l.lits} lit${s_(l.lits)}`],
+      ['bain', `${l.sdb} salle${s_(l.sdb)} d’eau`], ['lune', `${l.min_nuits} nuit${s_(l.min_nuits)} minimum`]];
+    const savoir = [['🕒', `Arrivée ${esc(l.arrivee ? 'à partir de ' + l.arrivee : 'à convenir')} · départ ${esc(l.depart ? 'avant ' + l.depart : 'à convenir')}`],
+      ['🔁', l.annulation && ANNULATION[l.annulation] ? `<b>Annulation ${ANNULATION[l.annulation][0].toLowerCase()}</b> : ${ANNULATION[l.annulation][1]} Passé ce délai, l’hôte peut vous demander tout ou partie du prix convenu.` : 'Conditions d’annulation : à convenir avec l’hôte avant qu’il confirme.'],
+      ['💶', 'Paiement directement à l’hôte, après sa confirmation. La taxe de séjour de la commune peut s’ajouter : l’hôte la collecte.'],
+      ...(l.numero_enregistrement ? [['🏷️', `Meublé de tourisme déclaré en mairie : n° d’enregistrement <b>${esc(l.numero_enregistrement)}</b>`]] : [])];
+    vue(`<div class="wrap fiche-tete">
+      <a class="retour-l" href="#/recherche${qsDates(p)}" id="retourFiche">${ico('gauche')} Retour aux logements</a>
+      <div class="ligne-t"><div><h1>${esc(l.titre)}</h1>
+        <div class="meta"><span>${ico('pin')} ${l.quartier ? esc(l.quartier) + ', ' : ''}${lieu(l)}</span>${note ? `<span class="etoile">★ ${noteFr(note.moyenne)} · ${note.nombre} avis</span>` : '<span class="tag">Nouveau</span>'}${hote?.valide ? '<span class="tag ok">✓ Hôte vérifié</span>' : ''}${l.statut !== 'publie' ? tag(ST_ANN[l.statut]) : ''}</div></div>
+        <div class="barre-act"><button type="button" class="btn btn-s btn-l" id="partager">${ico('partage')} Partager</button>
+          <button type="button" class="btn btn-s btn-l ${favoris.has(l.id) ? 'on' : ''}" data-fav="${l.id}" aria-pressed="${favoris.has(l.id)}">${ico('coeur')} <span>${favoris.has(l.id) ? 'Enregistré' : 'Enregistrer'}</span></button>
+          <button type="button" class="btn btn-s btn-l" data-comparer="${l.id}" aria-pressed="${compares().includes(l.id)}">${ico('comparer')} Comparer</button></div></div>
+      ${galerie(l, ph)}</div>
+    <div class="wrap"><nav class="ancres" aria-label="Sections de l’annonce">${[['apercu', 'Aperçu'], ['equipements', 'Équipements'], ['savoir', 'Bon à savoir'], ['emplacement', 'Emplacement'], ['disponibilites', 'Disponibilités'], ['avis', 'Avis']]
+      .map(([k, t]) => `<button type="button" data-ancre="${k}">${t}</button>`).join('')}</nav>
+    <div class="fiche"><div>
+      <section id="apercu"><h2>${esc(TYPES[l.type] || 'Logement')} ${esc(aLieu(l.commune))}</h2>
+        <div class="faits">${faits.map(([i, t]) => `<div>${ico(i)}<span>${t}</span></div>`).join('')}</div>
+        <div class="bloc hote"><div class="avatar">${hote?.avatar ? `<img src="${esc(photo(hote.avatar))}" alt="">` : initiale(hote)}</div>
+          <div><b>Proposé par ${prenomH}</b> ${hote?.valide ? '<span class="tag ok">✓ Vérifié par Kaz An Nou</span>' : ''}<div class="muted petit">Membre depuis ${hote ? new Date(hote.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : '—'}</div></div></div>
+        <div class="bloc"><div class="texte-long ${long ? 'replie' : ''}" id="desc">${esc(l.description) || '<span class="muted">Pas encore de description.</span>'}</div>
+          ${long ? '<button type="button" class="lien" id="lireSuite" aria-expanded="false" aria-controls="desc">Lire la suite</button>' : ''}</div>
         ${l.video ? (/\.mp4(\?|$)/i.test(l.video) ? `<div class="bloc"><h3>🎬 Visite en vidéo</h3><video class="video-log" src="${esc(l.video)}" controls playsinline preload="metadata" ${ph[0] ? `poster="${esc(photo(ph[0]))}"` : ''}></video></div>`
           : `<p><a class="btn btn-v" href="${esc(l.video)}" target="_blank" rel="noopener">🎬 Voir la vidéo</a></p>`) : ''}
-        ${l.visite3d ? `<p><a class="btn btn-v" href="${esc(l.visite3d)}" target="_blank" rel="noopener">🧊 Visite virtuelle 3D</a></p>` : ''}
-        <div class="bloc hote"><div class="avatar">${hote?.avatar ? `<img src="${esc(photo(hote.avatar))}" alt="">` : initiale(hote)}</div>
-          <div><b>Proposé par ${esc(hote?.prenom || 'un propriétaire')}</b> ${hote?.valide ? '<span class="tag ok">✓ Vérifié par Kaz An Nou</span>' : ''}<div class="muted petit">Membre depuis ${hote ? new Date(hote.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : '—'}</div></div></div>
-        <div class="bloc"><p style="white-space:pre-line">${esc(l.description) || '<span class="muted">Pas encore de description.</span>'}</p></div>
-        <div class="bloc"><h3>Équipements</h3><div class="equip">${EQUIP.filter(e => l.equipements.includes(e[0])).map(e => `<span>${e[1]} ${esc(e[2])}</span>`).join('') || '<span class="muted">Non renseignés</span>'}</div></div>
-        <div class="bloc"><h3>Bon à savoir</h3><div class="specs" style="color:var(--texte)"><span>🕒 Arrivée ${esc(l.arrivee || 'à convenir')}</span><span>🕚 Départ ${esc(l.depart || 'à convenir')}</span><span>🌙 ${l.min_nuits} nuit${l.min_nuits > 1 ? 's' : ''} minimum</span></div>
-          ${l.regles ? `<p style="white-space:pre-line">${esc(l.regles)}</p>` : ''}</div>
-        <div class="bloc"><h3>Disponibilités</h3><div id="cal">${calendrier(prises, p.arrivee, p.depart)}</div><p class="muted petit">Les dates barrées sont déjà réservées.</p></div>
-        <div class="bloc"><h3>${avis.length ? `★ ${note.moyenne} · ${avis.length} avis` : 'Avis'}</h3>
-          ${avis.length ? avis.map(a => `<div class="avis1"><b>${'★'.repeat(a.note)}${'☆'.repeat(5 - a.note)}</b><span>${esc(a.texte)}</span><small class="muted">${jourLong(a.created_at.slice(0, 10))}</small></div>`).join('')
-            : '<p class="muted">Pas encore d’avis. Seuls les voyageurs qui ont séjourné peuvent en laisser un.</p>'}</div>
-      </div>
-      <aside class="resa"><div><span class="p">${eur(l.prix_nuit)}</span> <span class="muted">/ nuit</span></div>
-        <form id="fResa"><div class="champs2">
+        ${l.visite3d ? `<p><a class="btn btn-v" href="${esc(l.visite3d)}" target="_blank" rel="noopener">🧊 Visite virtuelle 3D</a></p>` : ''}</section>
+      <section id="equipements" class="bloc"><h2>Équipements</h2><div class="equip">${eqs.map(e => `<span><span aria-hidden="true">${e[1]}</span> ${esc(e[2])}</span>`).join('') || '<span class="muted">Non renseignés</span>'}</div></section>
+      <section id="savoir" class="bloc"><h2>Bon à savoir</h2><div class="savoir">${savoir.map(([i, t]) => `<div><span aria-hidden="true">${i}</span><span>${t}</span></div>`).join('')}</div>
+        ${l.regles ? `<h3 style="margin-top:16px">Règles de la maison</h3><p class="texte-long">${esc(l.regles)}</p>` : ''}</section>
+      ${blocEmplacement(l)}
+      <section id="disponibilites" class="bloc"><h2>Disponibilités</h2><div id="cal">${calendrier(prises, p.arrivee, p.depart)}</div></section>
+      <section id="avis" class="bloc"><h2>${avis.length && note ? `★ ${noteFr(note.moyenne)} · ${avis.length} avis` : 'Avis'}</h2>
+        <p class="muted petit">Avis vérifiés : seuls les voyageurs qui ont séjourné ici peuvent en laisser un, une fois le séjour terminé.</p>
+        ${avis.length ? avis.map(a => `<div class="avis1"><b aria-label="${a.note} sur 5">${'★'.repeat(a.note)}${'☆'.repeat(5 - a.note)}</b><span>${esc(a.texte)}</span><small class="muted">${jourLong(a.created_at.slice(0, 10))}</small></div>`).join('')
+          : '<p class="muted">Pas encore d’avis pour ce logement.</p>'}</section>
+      <p class="signaler"><button type="button" class="lien" id="signaler">${ico('drapeau')} Signaler cette annonce</button></p>
+    </div>
+    <aside class="resa" id="resa" aria-labelledby="resaTitre">
+      <div class="resa-tete"><div><span class="p">${eur(l.prix_nuit)}</span> <span class="muted">/ nuit</span></div><button type="button" class="rond resa-fermer" id="fermerResa" aria-label="Fermer la demande">${ico('fermer')}</button></div>
+      <h2 id="resaTitre" class="sr">Demande de réservation</h2>
+      <form id="fResa"><div class="champs2">
           <label><span>Arrivée</span><input type="date" name="debut" required min="${auj()}" value="${esc(p.arrivee || '')}"></label>
           <label><span>Départ</span><input type="date" name="fin" required min="${plus(auj(), 1)}" value="${esc(p.depart || '')}"></label>
           <label class="plein"><span>Voyageurs</span><select name="voyageurs">${Array.from({ length: l.voyageurs }, (_, i) => `<option ${i + 1 === Number(p.voyageurs || 2) ? 'selected' : ''}>${i + 1}</option>`).join('')}</select></label></div>
-          <label class="f" style="display:block"><textarea name="message" maxlength="2000" placeholder="Un mot pour ${esc(hote?.prenom || 'le propriétaire')} (heure d’arrivée, motif du séjour…)" style="min-height:70px"></textarea></label>
-          <div class="calcul" id="calcul"></div>
-          <button class="btn btn-p" style="width:100%;margin-top:14px" ${moi?.id === l.owner ? 'disabled' : ''}>Demander à réserver</button>
-          <p class="muted petit" style="text-align:center;margin:10px 0 0">Aucun paiement maintenant : ${esc(hote?.prenom || 'le propriétaire')} confirme d’abord, puis vous convenez du règlement ensemble.</p></form></aside>
-      </div></div>`);
-    const f = $('#fResa');
+        <label class="sr" for="msgResa">Message pour l’hôte</label><textarea id="msgResa" name="message" maxlength="2000" placeholder="Un mot pour ${prenomH} : heure d’arrivée, motif du séjour, vos questions…"></textarea>
+        <div class="calcul" id="calcul" aria-live="polite"></div>
+        <button class="btn btn-p" style="width:100%;margin-top:14px" ${moi?.id === l.owner ? 'disabled' : ''}>Demander à réserver</button>
+        <ul class="rassure"><li>${ico('check')} Aucun paiement maintenant : ${prenomH} confirme d’abord.</li><li>${ico('check')} Vous réglez ensuite directement l’hôte, comme convenu ensemble.</li><li>${ico('check')} Une messagerie pour tout organiser avant d’arriver.</li></ul></form>
+      <div class="secondaire"><a href="${wa(WA, `Bonjour Kaz An Nou, je voudrais une visite vidéo en direct du logement « ${l.titre} » (${l.commune}) : https://immo.ilo-tech.com/#/logement/${l.id}`)}" target="_blank" rel="noopener">📹 Demander une visite vidéo en direct</a></div></aside>
+    </div></div>
+    <div class="barre-resa"><div><b>${eur(l.prix_nuit)}</b> <span class="muted">/ nuit</span><small id="barreDates">Ajoutez vos dates</small></div><button type="button" class="btn btn-p" id="ouvrirResa" aria-controls="resa" aria-expanded="false">Demander à réserver</button></div>`);
+
+    const f = $('#fResa'); let decal = 0;
     const maj = () => {
       const d = Object.fromEntries(new FormData(f));
       if (d.debut) f.fin.min = plus(d.debut, l.min_nuits);
-      const n = d.debut && d.fin ? nuits(d.debut, d.fin) : 0;
-      $('#calcul').innerHTML = n > 0 ? `<div><span>${eur(l.prix_nuit)} × ${n} nuit${n > 1 ? 's' : ''}</span><span>${eur(l.prix_nuit * n)}</span></div>
-        ${l.menage > 0 ? `<div><span>Ménage</span><span>${eur(l.menage)}</span></div>` : ''}<div class="tot"><span>Total</span><span>${eur(l.prix_nuit * n + Number(l.menage))}</span></div>
-        ${n < l.min_nuits ? `<div style="color:var(--ko)">Séjour minimum : ${l.min_nuits} nuits</div>` : ''}` : '';
-      $('#cal').innerHTML = calendrier(prises, d.debut, d.fin);
+      const nn = d.debut && d.fin ? nuits(d.debut, d.fin) : 0, total = l.prix_nuit * nn + Number(l.menage);
+      $('#calcul').innerHTML = nn > 0 ? `<div><span>${eur(l.prix_nuit)} × ${nn} nuit${s_(nn)}</span><span>${eur(l.prix_nuit * nn)}</span></div>
+        ${l.menage > 0 ? `<div><span>Ménage</span><span>${eur(l.menage)}</span></div>` : ''}<div class="tot"><span>Total</span><span>${eur(total)}</span></div>
+        <div class="muted petit">Taxe de séjour de la commune en plus, le cas échéant.</div>
+        ${nn < l.min_nuits ? `<div style="color:var(--ko)">Séjour minimum : ${l.min_nuits} nuits</div>` : ''}` : '<p class="muted petit" style="margin:0">Choisissez vos dates pour voir le total.</p>';
+      $('#cal').innerHTML = calendrier(prises, d.debut, d.fin, decal);
+      $('#barreDates').textContent = nn > 0 ? `${jour(d.debut)} → ${jour(d.fin)} · ${eur(total)}` : 'Ajoutez vos dates';
     };
     f.addEventListener('input', maj); maj();
+    $('#cal').addEventListener('click', e => { const b = e.target.closest('[data-cal]'); if (!b) return; decal = Math.max(0, Math.min(10, decal + Number(b.dataset.cal) * 2)); maj(); $(`#cal [data-cal="${b.dataset.cal}"]`)?.focus(); });
     f.addEventListener('submit', async e => {
       e.preventDefault();
       if (!exigeCompte()) return;
       const d = Object.fromEntries(new FormData(f));
       if (!d.debut || !d.fin || d.fin <= d.debut) return toast('Choisissez vos dates d’arrivée et de départ.', true);
-      if (prises.some(p => d.debut < p.fin && d.fin > p.debut)) return toast('Ces dates ne sont plus disponibles.', true);
+      if (prises.some(x => d.debut < x.fin && d.fin > x.debut)) return toast('Ces dates ne sont plus disponibles.', true);
       const b = f.querySelector('button'); b.disabled = true;
       try {
         const r = await q(sb.from('reservations').insert({ logement_id: id, debut: d.debut, fin: d.fin, voyageurs: Number(d.voyageurs), message: d.message || null }).select().single());
@@ -354,15 +552,58 @@ async function pageLogement(id) {
         aller('#/compte/voyages?nouvelle=' + r.id);
       } catch (err) { toast(erreur(err), true); b.disabled = false; }
     });
-    document.querySelectorAll('[data-zoom]').forEach(im => im.addEventListener('click', () => visionneuse(ph.map(photo), Number(im.dataset.zoom))));
-  } catch (e) { vue(`<div class="wrap"><p>${esc(erreur(e))}</p></div>`); }
+    // téléphone : la demande s'ouvre en feuille du bas depuis la barre collée en bas
+    const resa = $('#resa'), voile = document.createElement('div'); voile.className = 'voile';
+    const fermer = () => { if (!resa.classList.contains('ouverte')) return; resa.classList.remove('ouverte'); voile.remove(); document.body.classList.remove('sans-defil'); $('#ouvrirResa')?.setAttribute('aria-expanded', 'false'); $('#ouvrirResa')?.focus(); };
+    $('#ouvrirResa').addEventListener('click', () => { resa.classList.add('ouverte'); document.body.appendChild(voile); document.body.classList.add('sans-defil'); $('#ouvrirResa').setAttribute('aria-expanded', 'true'); setTimeout(() => f.debut.focus(), 60); });
+    $('#fermerResa').addEventListener('click', fermer); voile.addEventListener('click', fermer);
+    const echap = e => { if (e.key === 'Escape') fermer(); }; document.addEventListener('keydown', echap); surDepart(() => document.removeEventListener('keydown', echap));
+    // photos, description, partage, signalement, retour à la recherche
+    document.querySelectorAll('[data-zoom]').forEach(b => b.addEventListener('click', () => visionneuse(ph.map(photo), Number(b.dataset.zoom), l.titre, b)));
+    const gal = $('#galerie'), cpt = $('#compteurPh');
+    if (gal && cpt) gal.addEventListener('scroll', () => { cpt.textContent = `${Math.min(ph.length, Math.round(gal.scrollLeft / gal.clientWidth) + 1)} / ${ph.length}`; }, { passive: true });
+    $('#lireSuite')?.addEventListener('click', e => { const ouvert = $('#desc').classList.toggle('replie') === false; e.target.setAttribute('aria-expanded', String(ouvert)); e.target.textContent = ouvert ? 'Réduire' : 'Lire la suite'; });
+    $('#partager').addEventListener('click', async () => {
+      const url = `${location.origin}${location.pathname}#/logement/${l.id}`;
+      try { if (navigator.share) await navigator.share({ title: l.titre, text: `${l.titre} (${l.commune}) sur Kaz An Nou`, url }); else { await navigator.clipboard.writeText(url); toast('Lien copié : collez-le où vous voulez.'); } }
+      catch (err) { /* partage annulé */ }
+    });
+    $('#signaler').addEventListener('click', () => signalerLogement(l));
+    $('#retourFiche').addEventListener('click', e => { if (pagesVues > 1) { e.preventDefault(); history.back(); } });
+    // carte de l'emplacement : chargée quand on s'en approche
+    const pos = positionDe(l), mc = $('#miniCarte');
+    if (pos && mc && 'IntersectionObserver' in window) {
+      const io = new IntersectionObserver(([x]) => {
+        if (!x.isIntersecting) return; io.disconnect();
+        chargerCarte().then(L => {
+          if (!document.body.contains(mc)) return;
+          const m = fondCarte(L, mc, [pos.lat, pos.lng], pos.approx ? 13 : 15, { dragging: !L.Browser.mobile });
+          L.circle([pos.lat, pos.lng], { radius: pos.approx ? 1500 : 400, color: '#1b6b4a', weight: 2, fillColor: '#1b6b4a', fillOpacity: .14 }).addTo(m);
+          surDepart(() => m.remove());
+        }).catch(() => { mc.outerHTML = '<p class="muted">Carte indisponible pour le moment.</p>'; });
+      }, { rootMargin: '300px' });
+      io.observe(mc); surDepart(() => io.disconnect());
+    }
+  } catch (e) { vue(`<div class="wrap" style="padding-top:24px">${erreurEtat(e)}</div>`); }
 }
-function visionneuse(urls, i) {
-  const v = document.createElement('div'); v.className = 'visionneuse';
-  const montrer = () => { v.innerHTML = `<img src="${esc(urls[i])}" alt="Photo ${i + 1}"><button aria-label="Fermer">×</button>`; };
-  montrer();
-  v.addEventListener('click', e => { if (e.target.tagName === 'IMG') { i = (i + 1) % urls.length; montrer(); } else v.remove(); });
-  document.body.appendChild(v);
+// visionneuse plein écran : flèches, Échap, glisser ; le focus reste dedans puis revient au bouton d'origine
+function visionneuse(urls, i, titre = '', retour = null) {
+  if (!urls.length) return;
+  const v = document.createElement('div'); v.className = 'visionneuse'; v.setAttribute('role', 'dialog'); v.setAttribute('aria-modal', 'true'); v.setAttribute('aria-label', 'Photos : ' + titre);
+  v.innerHTML = `<div class="vis-haut"><span aria-live="polite" id="visN"></span><button type="button" data-v="fermer" aria-label="Fermer les photos">${ico('fermer')}</button></div>
+    <div class="vis-img"><img alt=""></div>
+    <div class="vis-bas"><button type="button" data-v="prec" aria-label="Photo précédente">${ico('gauche')}</button><button type="button" data-v="suiv" aria-label="Photo suivante">${ico('droite')}</button></div>`;
+  const img = v.querySelector('img'), n = v.querySelector('#visN');
+  const montrer = () => { img.src = urls[i]; img.alt = `Photo ${i + 1} sur ${urls.length} : ${titre}`; n.textContent = `${i + 1} / ${urls.length}`; };
+  const allerA = d => { i = (i + d + urls.length) % urls.length; montrer(); };
+  const fermer = () => { v.remove(); document.removeEventListener('keydown', clavier); document.body.classList.remove('sans-defil'); retour?.focus(); };
+  const clavier = e => {
+    if (e.key === 'Escape') fermer(); else if (e.key === 'ArrowLeft') allerA(-1); else if (e.key === 'ArrowRight') allerA(1);
+    else if (e.key === 'Tab') { const b = [...v.querySelectorAll('button')], k = b.indexOf(document.activeElement); e.preventDefault(); b[(k + (e.shiftKey ? -1 : 1) + b.length) % b.length].focus(); }
+  };
+  v.addEventListener('click', e => { if (v.dataset.glisse) { delete v.dataset.glisse; return; } const b = e.target.closest('[data-v]'); if (b) return b.dataset.v === 'fermer' ? fermer() : allerA(b.dataset.v === 'prec' ? -1 : 1); if (e.target === img) allerA(1); else if (e.target === v || e.target.classList.contains('vis-img')) fermer(); });
+  let x0 = null; v.addEventListener('pointerdown', e => { x0 = e.clientX; }); v.addEventListener('pointerup', e => { if (x0 !== null && Math.abs(e.clientX - x0) > 60) { allerA(e.clientX < x0 ? 1 : -1); v.dataset.glisse = '1'; setTimeout(() => delete v.dataset.glisse, 400); } x0 = null; });
+  document.addEventListener('keydown', clavier); document.body.appendChild(v); document.body.classList.add('sans-defil'); montrer(); v.querySelector('[data-v="suiv"]').focus();
 }
 
 // ---------------------------------------------------------------- services pour la maison
@@ -440,7 +681,7 @@ async function pagePrestation(id) {
 
 function pageRetour() {
   const txt = 'Bonjour Kaz An Nou, je prépare mon retour au pays. Territoire : … · Ville : … · Date d’arrivée : … · Mes besoins : …';
-  vue(`<section class="hero"><div class="wrap"><h1>Retour au pays : <em>on prépare votre arrivée</em>.</h1>
+  vue(`<section class="hero"><div class="wrap">${ONGLETS('#/retour')}<h1>Retour au pays : <em>on prépare votre arrivée</em>.</h1>
     <p>Vous revenez vivre aux Antilles, en Guyane, à La Réunion ou à Mayotte, ou vous y êtes muté ? Sur place, on s’occupe de ce qui ne peut pas se faire à distance.</p>
     <a class="btn btn-p" href="${wa(WA, txt)}" target="_blank" rel="noopener">Parler de mon projet sur WhatsApp</a></div></section>
     <div class="wrap section"><div class="cats">${[['📹', 'Visite vidéo en direct', 'd’un logement que vous avez trouvé, avant de signer'], ['🛰️', 'Internet prêt', 'box ou Starlink installé avant votre arrivée'],
@@ -513,8 +754,9 @@ const fermePourLeMoment = () => `<div class="wrap"><div class="carte-f"><h1>Ouve
   <a class="btn btn-wa" href="${wa(WA, 'Bonjour Kaz An Nou, ')}" target="_blank" rel="noopener">WhatsApp</a></div></div>`;
 
 // ---------------------------------------------------------------- espace compte
-const MENUS = () => [
-  ['', 'Tableau de bord'], ['voyages', 'Mes séjours'], ['services', 'Mes demandes de services'], ['favoris', 'Favoris'], ['messages', 'Messages', compteurs.msgs], ['profil', 'Mon profil'],
+const MENUS = (agence = false) => [
+  ['', 'Tableau de bord'], ['voyages', 'Mes séjours'], ['services', 'Mes demandes de services'], ['favoris', 'Favoris'], ...(agence ? [['alertes', 'Mes alertes']] : []),
+  ['notifs', 'Notifications', compteurs.notifs], ['messages', 'Messages', compteurs.msgs], ['profil', 'Mon profil'],
   ...(role('proprietaire') ? [['sep', 'Propriétaire'], ['logements', 'Mes logements'], ['recues', 'Réservations reçues'], ['carnet', 'Carnet du logement']] : []),
   ...(role('prestataire') ? [['sep', 'Prestataire'], ['prestations', 'Mes prestations'], ['demandes', 'Demandes reçues']] : []),
   ...(!role('proprietaire') || !role('prestataire') ? [['partenaire', 'Devenir partenaire']] : []),
@@ -525,11 +767,12 @@ async function pageCompte(onglet, sous) {
   if (!exigeCompte()) return;
   await chargerMoi();               // rôle à jour (ex. partenaire validé pendant la session)
   if (!moi) return aller('#/connexion');
+  const agence = await agenceInstallee();
   vue(`<div class="wrap compte"><nav class="menu-c" aria-label="Mon espace">
-    ${MENUS().map(([k, t, n]) => k === 'sep' ? `<span class="sep">${esc(t)}</span>` : `<a href="#/compte${k ? '/' + k : ''}" class="${k === (onglet || '') ? 'on' : ''}">${esc(t)}${n ? `<span class="badge">${n}</span>` : ''}</a>`).join('')}
+    ${MENUS(agence).map(([k, t, n]) => k === 'sep' ? `<span class="sep">${esc(t)}</span>` : `<a href="#/compte${k ? '/' + k : ''}" class="${k === (onglet || '') ? 'on' : ''}">${esc(t)}${n ? `<span class="badge">${n}</span>` : ''}</a>`).join('')}
     <a href="#/deconnexion">Se déconnecter</a></nav><div id="contenu" class="chargement">Chargement…</div></div>`);
   const c = $('#contenu'); c.className = '';
-  const pages = { '': ongletAccueil, voyages: ongletVoyages, services: ongletMesDemandes, favoris: ongletFavoris, messages: ongletMessages, profil: ongletProfil, partenaire: ongletPartenaire,
+  const pages = { '': ongletAccueil, voyages: ongletVoyages, services: ongletMesDemandes, favoris: ongletFavoris, alertes: ongletAlertes, notifs: ongletNotifs, messages: ongletMessages, profil: ongletProfil, partenaire: ongletPartenaire,
     logements: ongletLogements, recues: ongletRecues, carnet: ongletCarnet, prestations: ongletPrestations, demandes: ongletDemandesRecues, admin: ongletAdmin };
   try { await (pages[onglet || ''] || ongletAccueil)(c, sous); } catch (e) { c.innerHTML = `<p>${esc(erreur(e))}</p>`; }
 }
@@ -605,7 +848,10 @@ async function ongletFavoris(c) {
   const ids = [...favoris];
   const l = ids.length ? await q(sb.from('logements').select('*').in('id', ids)) : [];
   const n = await notesDe(l.map(x => x.id));
-  c.innerHTML = `<h1>Favoris</h1>${l.length ? `<div class="grille">${l.map(x => carteLogement(x, n)).join('')}</div>` : '<div class="vide-etat"><div class="ico">♡</div><h3>Pas encore de favoris</h3><p class="muted">Touchez ♡ sur un logement pour le garder ici.</p></div>'}`;
+  c.innerHTML = `<div class="titre-s"><h1>Favoris</h1>${l.length ? `<div class="actions"><a class="btn btn-s" href="#/recherche?favoris=1">${ico('carte')} Voir sur la carte</a><a class="btn btn-s" href="#/comparer">${ico('comparer')} Comparateur</a></div>` : ''}</div>
+    ${l.length ? `<p class="muted">Touchez « Comparer » sur 2 à 4 logements pour les mettre côte à côte.</p><div class="grille">${l.map(x => carteLogement(x, n, true)).join('')}</div>`
+      : `<div class="vide-etat"><div class="ico">♡</div><h3>Pas encore de favoris</h3><p class="muted">Touchez le cœur d’un logement pour le garder ici, et retrouvez-le sur tous vos appareils.</p><a class="btn btn-p" href="#/recherche">Chercher un logement</a></div>`}`;
+  barreComparer();
 }
 
 async function ongletProfil(c) {
@@ -680,8 +926,28 @@ async function ongletLogements(c, sous) {
   };
 }
 
+// formulaire du logement : l'hôte place son logement sur la carte (point arrondi par la base)
+function placerSurCarte(l) {
+  const f = $('#fLog'), el = $('#cartePin'); if (!f || !el) return;
+  chargerCarte().then(L => {
+    if (!document.body.contains(el)) return;
+    const c = communeDe(f.territoire.value, f.commune.value), t = CENTRES[f.territoire.value] || CENTRES.Martinique;
+    const depart = l.lat != null ? [Number(l.lat), Number(l.lng), 15] : c ? [c[2], c[3], 14] : t;
+    const m = fondCarte(L, el, [depart[0], depart[1]], depart[2]);
+    let pt = l.lat != null ? L.marker([Number(l.lat), Number(l.lng)], { keyboard: false }).addTo(m) : null;
+    const poser = ll => {
+      if (pt) pt.setLatLng(ll); else pt = L.marker(ll, { keyboard: false }).addTo(m);
+      f.lat.value = ll.lat.toFixed(5); f.lng.value = ll.lng.toFixed(5); $('#pinEtat').textContent = 'Logement placé sur la carte (le public verra le quartier).';
+    };
+    m.on('click', e => poser(e.latlng));
+    $('#pinCommune').addEventListener('click', () => { const k = communeDe(f.territoire.value, f.commune.value), z = CENTRES[f.territoire.value] || CENTRES.Martinique; m.setView(k ? [k[2], k[3]] : [z[0], z[1]], k ? 14 : z[2]); });
+    $('#pinRetirer')?.addEventListener('click', () => { if (pt) { pt.remove(); pt = null; } f.lat.value = ''; f.lng.value = ''; $('#pinEtat').textContent = 'Point retiré : la carte de la recherche montrera la commune.'; });
+    window.__cartePin = m;   // tests
+  }).catch(() => { el.outerHTML = '<p class="muted">Carte indisponible pour le moment : vous pourrez placer le logement plus tard.</p>'; });
+}
 async function formLogement(c, id) {
   const avecVideo = !(await sb.from('logements').select('video').limit(1)).error;   // colonne ajoutée par la mise à jour de la base
+  const agence = await agenceInstallee();   // agence.sql : position sur la carte, numéro d'enregistrement, annulation
   const l = id ? await q(sb.from('logements').select('*').eq('id', id).single()) : { titre: '', description: '', type: 'villa', territoire: profil.territoire || 'Martinique', commune: profil.commune || '', chambres: 1, lits: 1, sdb: 1, voyageurs: 2, prix_nuit: '', menage: 0, min_nuits: 1, equipements: [], photos: [], arrivee: '16 h', depart: '11 h', regles: '', visite3d: '', quartier: '' };
   let photos = [...l.photos];
   const dessinerPhotos = () => { $('#ph').innerHTML = photos.map((p, i) => `<div><img src="${esc(photo(p))}" alt=""><button type="button" data-suppr="${i}" aria-label="Retirer">×</button></div>`).join(''); };
@@ -696,6 +962,15 @@ async function formLogement(c, id) {
       <label>Description<textarea name="description" maxlength="5000" style="min-height:160px">${esc(l.description)}</textarea></label>
       <fieldset class="f" style="border:0;padding:0;margin:0"><legend style="font-weight:600;margin-bottom:6px">Équipements</legend><div class="cases">${EQUIP.map(([k, i, t]) => `<label><input type="checkbox" name="eq" value="${k}" ${l.equipements.includes(k) ? 'checked' : ''}> ${i} ${esc(t)}</label>`).join('')}</div></fieldset>
       <label>Règles de la maison<textarea name="regles" maxlength="2000" placeholder="Non-fumeur, fêtes interdites, animaux…">${esc(l.regles || '')}</textarea></label>
+      ${agence ? `<fieldset class="f encadre"><legend style="font-weight:700">Emplacement sur la carte</legend>
+        <p class="aide" style="margin:0">Touchez la carte à l’endroit du logement. Les voyageurs voient seulement le quartier : la base arrondit le point à environ 300 m, et l’adresse exacte reste entre vous et le voyageur confirmé.</p>
+        <div class="carte-pin" id="cartePin" role="application" aria-label="Carte : touchez pour placer le logement"></div>
+        <input type="hidden" name="lat" value="${l.lat ?? ''}"><input type="hidden" name="lng" value="${l.lng ?? ''}">
+        <div class="actions"><span class="petit" id="pinEtat" aria-live="polite">${l.lat != null ? 'Logement placé sur la carte.' : 'Pas encore placé : la carte de la recherche montrera la commune.'}</span>
+          <button type="button" class="btn btn-s" id="pinCommune">Centrer sur la commune</button>${l.lat != null ? '<button type="button" class="btn btn-s btn-ko" id="pinRetirer">Retirer le point</button>' : ''}</div></fieldset>
+      <div class="ligne2"><label>N° d’enregistrement du meublé <span class="aide">(13 caractères donnés par la mairie, ex. 97206 000123 AB ; affiché sur l’annonce)</span>
+          <input name="numero_enregistrement" maxlength="30" value="${esc(l.numero_enregistrement || '')}" pattern="[A-Za-z0-9][A-Za-z0-9 ]{3,28}[A-Za-z0-9]" title="Lettres, chiffres et espaces, comme sur le récépissé de la mairie" autocomplete="off"></label>
+        <label>Conditions d’annulation<select name="annulation"><option value="">À convenir avec le voyageur</option>${Object.entries(ANNULATION).map(([k, [t, d]]) => `<option value="${k}" ${l.annulation === k ? 'selected' : ''}>${t} : ${d}</option>`).join('')}</select></label></div>` : ''}
       <label>Lien de visite virtuelle 3D <span class="aide">(facultatif, https://…)</span><input name="visite3d" type="url" pattern="https://.*" value="${esc(l.visite3d || '')}"></label>
       ${avecVideo ? '' : '<!--'}<label>Lien d’une vidéo <span class="aide">(facultatif : fichier .mp4, YouTube, Facebook… en https://)</span><input name="video" type="url" pattern="https://.*" maxlength="300" value="${esc(l.video || '')}"></label>${avecVideo ? '' : '-->'}
       <div><b>Photos</b> <span class="aide">(jusqu’à 20 ; la première est la photo principale)</span><div class="photos-ed" id="ph" style="margin:8px 0"></div><input type="file" id="ajoutPh" accept="image/*" multiple></div>
@@ -703,6 +978,7 @@ async function formLogement(c, id) {
         ${id && ['brouillon', 'refuse'].includes(l.statut) ? '<button type="button" class="btn btn-ko" id="supprLog">Supprimer</button>' : ''}${id && l.statut === 'publie' ? '<button type="button" class="btn btn-ko" id="archLog">Retirer de la location</button>' : ''}</div>
       <p class="muted petit">Changer le titre, la description ou les photos d’une annonce en ligne la renvoie en validation (sous 48 h).</p></form>`;
   dessinerPhotos(); brancherLieux();
+  if (agence) placerSurCarte(l);
   $('#ph').addEventListener('click', e => { const b = e.target.closest('[data-suppr]'); if (b) { photos.splice(Number(b.dataset.suppr), 1); dessinerPhotos(); } });
   $('#ajoutPh').addEventListener('change', async e => {
     const f = [...e.target.files].slice(0, 20 - photos.length); if (!f.length) return;
@@ -715,7 +991,8 @@ async function formLogement(c, id) {
     e.preventDefault(); const d = Object.fromEntries(new FormData(f)); const envoi = e.submitter?.value || 'en_attente';
     const ligne = { titre: d.titre.trim(), type: d.type, territoire: d.territoire, commune: d.commune.trim(), quartier: d.quartier.trim() || null, voyageurs: +d.voyageurs, chambres: +d.chambres, lits: +d.lits, sdb: +d.sdb,
       prix_nuit: +d.prix_nuit, menage: +d.menage || 0, min_nuits: +d.min_nuits, arrivee: d.arrivee.trim() || null, depart: d.depart.trim() || null, description: d.description.trim(),
-      equipements: new FormData(f).getAll('eq'), regles: d.regles.trim() || null, visite3d: d.visite3d.trim() || null, ...(avecVideo ? { video: (d.video || '').trim() || null } : {}), photos };
+      equipements: new FormData(f).getAll('eq'), regles: d.regles.trim() || null, visite3d: d.visite3d.trim() || null, ...(avecVideo ? { video: (d.video || '').trim() || null } : {}), photos,
+      ...(agence ? { lat: d.lat === '' ? null : Number(d.lat), lng: d.lng === '' ? null : Number(d.lng), numero_enregistrement: (d.numero_enregistrement || '').trim().toUpperCase() || null, annulation: d.annulation || null } : {}) };
     if (!(id && l.statut === 'publie')) ligne.statut = envoi;
     if (envoi === 'en_attente' && !photos.length) return toast('Ajoutez au moins une photo avant l’envoi en validation.', true);
     try {
@@ -908,7 +1185,8 @@ async function ongletAdmin(c) {
       ${p.siret ? `<a class="petit" href="https://annuaire-entreprises.data.gouv.fr/rechercher?terme=${encodeURIComponent(p.siret.replace(/\s/g, ''))}" target="_blank" rel="noopener">Vérifier le SIRET ↗</a>` : ''}</div>
       <div class="actions"><button class="btn btn-s btn-v" data-valider-p="${p.id}" data-role="${p.demande_role}">Valider</button><button class="btn btn-s btn-ko" data-refuser-p="${p.id}">Refuser</button></div></div>`).join('') : '<p class="muted">Aucune demande.</p>'}
     <h3>Logements à valider (${logs.length})</h3>
-    ${logs.length ? logs.map(l => `<div class="ligne-l">${l.photos[0] ? `<img class="mini" src="${esc(photo(l.photos[0]))}" alt="">` : '<div class="mini"></div>'}<div><b><a href="#/logement/${l.id}">${esc(l.titre)}</a></b><div class="muted petit">${esc(l.commune)} · ${eur(l.prix_nuit)} / nuit · ${l.photos.length} photos · ${tel(l.owner)}</div></div>
+    ${logs.length ? logs.map(l => `<div class="ligne-l">${l.photos[0] ? `<img class="mini" src="${esc(photo(l.photos[0]))}" alt="">` : '<div class="mini"></div>'}<div><b><a href="#/logement/${l.id}">${esc(l.titre)}</a></b><div class="muted petit">${esc(l.commune)} · ${eur(l.prix_nuit)} / nuit · ${l.photos.length} photos · ${tel(l.owner)}</div>
+        <div class="petit">${'lat' in l ? `${l.lat != null ? '📍 placé sur la carte' : '📍 pas de point (commune)'} · ${l.numero_enregistrement ? 'n° d’enregistrement ' + esc(l.numero_enregistrement) : '⚠️ sans n° d’enregistrement'} · annulation ${l.annulation ? esc(ANNULATION[l.annulation]?.[0] || l.annulation).toLowerCase() : 'à convenir'}` : ''}</div></div>
       <div class="actions"><button class="btn btn-s btn-v" data-pub-l="${l.id}">Publier</button><button class="btn btn-s btn-ko" data-ref-l="${l.id}">Refuser</button></div></div>`).join('') : '<p class="muted">Aucun.</p>'}
     <h3>Prestations à valider (${svcs.length})</h3>
     ${svcs.length ? svcs.map(s => `<div class="ligne-l"><div class="mini" style="display:grid;place-items:center;font-size:28px;background:var(--sable)">${CATS[s.categorie][0]}</div><div><b><a href="#/prestation/${s.id}">${esc(s.titre)}</a></b><div class="muted petit">À partir de ${eur(s.prix)} ${esc(UNITES[s.unite])} · ${tel(s.prestataire_id)}</div><div class="petit">${esc(s.description)}</div></div>
@@ -929,26 +1207,39 @@ async function ongletAdmin(c) {
 }
 
 // ---------------------------------------------------------------- routeur
+// navigation : chaque page part propre (cartes, feuilles, minuteries) ; en revenant en arrière, on retrouve l'endroit de la page
+let pagesVues = 0, retourArriere = false;
+const defilements = {};
+addEventListener('popstate', () => { retourArriere = true; });
+let pagePrecedente = null;
 async function rendre() {
+  if (pagePrecedente !== null) defilements[pagePrecedente] = scrollY;
+  nettoyer();
+  pageEnCours = location.hash || '#/'; pagePrecedente = pageEnCours; pagesVues += 1;
+  const y = retourArriere ? defilements[pageEnCours] || 0 : 0; retourArriere = false;
   const h = (location.hash || '#/').split('?')[0];
   const [, a, b, c2] = h.split('/');
   nav(); window.scrollTo(0, 0);
   document.title = 'Kaz An Nou — Séjours et services pour la maison, aux Antilles et ailleurs';
   try {
-    if (!a) return await pageAccueil();
-    if (a === 'recherche') return await pageRecherche();
-    if (a === 'logement' && b) return PRET ? await pageLogement(b) : vue(fermePourLeMoment());
-    if (a === 'services') return await pageServices(b);
-    if (a === 'prestation' && b) return PRET ? await pagePrestation(b) : vue(fermePourLeMoment());
-    if (a === 'retour') return pageRetour();
-    if (a === 'connexion') return pageConnexion();
-    if (a === 'inscription') return pageInscription();
-    if (a === 'compte') return await pageCompte(b, c2);
-    if (a === 'conversation' && b && c2) return await pageConversation(b, c2);
-    if (a === 'avis' && b && c2) return pageAvis(b, c2);
-    if (a === 'deconnexion') { await sb?.auth.signOut(); await chargerMoi(); toast('À bientôt !'); return aller('#/'); }
-    vue('<div class="wrap vide-etat" style="margin-top:30px"><h3>Page introuvable</h3><a href="#/">Accueil</a></div>');
-  } catch (e) { vue(`<div class="wrap"><p>${esc(erreur(e))}</p></div>`); }
+    if (!a) await pageAccueil();
+    else if (a === 'recherche') await pageRecherche();
+    else if (a === 'comparer') await pageComparer();
+    else if (a === 'proprietaires') await pageProprietaires();
+    else if (a === 'logement' && b) await (PRET ? pageLogement(b) : vue(fermePourLeMoment()));
+    else if (a === 'services') await pageServices(b);
+    else if (a === 'prestation' && b) await (PRET ? pagePrestation(b) : vue(fermePourLeMoment()));
+    else if (a === 'retour') pageRetour();
+    else if (a === 'connexion') pageConnexion();
+    else if (a === 'inscription') pageInscription();
+    else if (a === 'compte') await pageCompte(b, c2);
+    else if (a === 'conversation' && b && c2) await pageConversation(b, c2);
+    else if (a === 'avis' && b && c2) pageAvis(b, c2);
+    else if (a === 'deconnexion') { await sb?.auth.signOut(); await chargerMoi(); toast('À bientôt !'); return aller('#/'); }
+    else vue('<div class="wrap"><div class="vide-etat" style="margin-top:30px"><div class="ico">🧭</div><h3>Page introuvable</h3><a class="btn btn-p" href="#/">Accueil</a></div></div>');
+  } catch (e) { vue(`<div class="wrap" style="padding-top:24px">${erreurEtat(e)}</div>`); }
+  if (y && (location.hash || '#/') === pageEnCours) window.scrollTo(0, y);
+  barreComparer();
 }
 
 (async function demarrer() {
