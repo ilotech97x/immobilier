@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-app="kaz">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co https://ilo-tech.com https://*.tile.openstreetmap.org; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co https://ilo-tech.com https://*.tile.openstreetmap.org; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://tiles.openfreemap.org https://elevation-tiles-prod.s3.amazonaws.com; worker-src blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="google-site-verification" content="ri9KXFOI63E6awmfpb_6r0VXlEF12sMn3t8WI2xOZtA">
@@ -16,7 +16,7 @@
   <meta property="og:description" content="Villas, gîtes et appartements de propriétaires vérifiés, et des prestataires de confiance pour votre maison.">
   <meta property="og:url" content="https://immo.ilo-tech.com/"><meta property="og:image" content="https://immo.ilo-tech.com/img/drone.jpg">
   <link rel="icon" href="img/logo.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="kaz.css?v=5">
+  <link rel="stylesheet" href="kaz.css?v=6">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Kaz An Nou","alternateName":["IloTech Immobilier","Kaz an nou"],"url":"https://immo.ilo-tech.com/","inLanguage":"fr-FR","publisher":{"@type":"LocalBusiness","name":"IloTech","alternateName":["Ilo Tech","Ilo-Tech","ILOTECH","Ilotech"],"url":"https://ilo-tech.com/","telephone":"+596696482678"}}</script>
 </head>
 <body>
@@ -41,11 +41,12 @@
 </footer>
   <nav class="bas" id="bas" aria-label="Navigation"></nav>
   <script src="config.js?v=2"></script>
+  <script src="mesure.js?v=1"></script>
   <script src="lib/supabase.js?v=2.45.4"></script>
   <script src="territoires.js?v=1"></script>
   <script src="lieux.js?v=1"></script>
-  <script src="recherche.js?v=1"></script>
+  <script src="recherche.js?v=3"></script>
   <script src="agence.js?v=1"></script>
-  <script src="kaz.js?v=11"></script>
+  <script src="kaz.js?v=12"></script>
 </body>
 </html>

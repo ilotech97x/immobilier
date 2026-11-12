@@ -434,7 +434,7 @@ function blocEmplacement(l) {
   const txt = !pos ? `Le logement se trouve ${esc(aLieu(l.commune))} (${esc(l.territoire)}).` : pos.approx ? `Le logement se trouve ${esc(aLieu(l.commune))} : la carte montre la commune, pas le logement.` : 'La carte montre le quartier, à environ 300 m près.';
   return `<section id="emplacement" class="bloc"><h2>Emplacement</h2>
     <p>${txt} L’adresse exacte vous est donnée par l’hôte une fois le séjour confirmé.</p>
-    ${pos ? '<div class="mini-carte" id="miniCarte" role="img" aria-label="Carte de l’emplacement approximatif du logement"></div>' : ''}
+    ${pos ? `<div class="mini-carte" id="miniCarte"><div class="mc" id="mcCarte" aria-label="Carte de l’emplacement approximatif du logement"></div>${choix3d('choix3dFiche')}</div>` : ''}
     ${dist.length ? `<ul class="distances">${dist.map(d => `<li>${d} <span class="muted">(à vol d’oiseau)</span></li>`).join('')}</ul>` : ''}
     ${blocRisques(l, c)}</section>`;
 }
@@ -573,16 +573,19 @@ async function pageLogement(id) {
     // carte de l'emplacement : chargée quand on s'en approche
     const pos = positionDe(l), mc = $('#miniCarte');
     if (pos && mc && 'IntersectionObserver' in window) {
-      const io = new IntersectionObserver(([x]) => {
-        if (!x.isIntersecting) return; io.disconnect();
-        chargerCarte().then(L => {
-          if (!document.body.contains(mc)) return;
-          const m = fondCarte(L, mc, [pos.lat, pos.lng], pos.approx ? 13 : 15, { dragging: !L.Browser.mobile });
-          L.circle([pos.lat, pos.lng], { radius: pos.approx ? 1500 : 400, color: '#1b6b4a', weight: 2, fillColor: '#1b6b4a', fillOpacity: .14 }).addTo(m);
-          surDepart(() => m.remove());
-        }).catch(() => { mc.outerHTML = '<p class="muted">Carte indisponible pour le moment.</p>'; });
-      }, { rootMargin: '300px' });
-      io.observe(mc); surDepart(() => io.disconnect());
+      let carte = null;
+      const dessiner = async () => {
+        carte?.detruire(); carte = null;
+        const ancien = $('#mcCarte'); if (!ancien) return; const neuf = ancien.cloneNode(false); ancien.replaceWith(neuf);
+        try {
+          carte = await creerCarte(neuf, { centre: [pos.lat, pos.lng], zoom: pos.approx ? 13 : 15, troisD: prefere3d(), molette: false, deplacer: !matchMedia('(pointer: coarse)').matches });
+          if (!document.body.contains(neuf)) return carte.detruire();
+          carte.cercle(pos.lat, pos.lng, pos.approx ? 1500 : 400); marquerChoix('choix3dFiche', carte.troisD);
+        } catch (e) { mc.innerHTML = '<p class="muted">Carte indisponible pour le moment.</p>'; }
+      };
+      mc.addEventListener('click', e => { const b = e.target.closest('[data-moteur]'); if (b && carte && (b.dataset.moteur === '3d') !== carte.troisD) { prefere3d(b.dataset.moteur === '3d'); dessiner(); } });
+      const io = new IntersectionObserver(([x]) => { if (x.isIntersecting) { io.disconnect(); dessiner(); } }, { rootMargin: '300px' });
+      io.observe(mc); surDepart(() => { io.disconnect(); carte?.detruire(); });
     }
   } catch (e) { vue(`<div class="wrap" style="padding-top:24px">${erreurEtat(e)}</div>`); }
 }

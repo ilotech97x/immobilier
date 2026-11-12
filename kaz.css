@@ -181,7 +181,13 @@ a.cat:hover{border-color:var(--vert2);box-shadow:var(--ombre)}
 .res{position:relative;display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);background:var(--surface);border:1px solid var(--ligne);border-radius:var(--r);overflow:hidden;transition:border-color .15s,box-shadow .15s}
 .res:hover,.res.actif{border-color:var(--vert2);box-shadow:0 0 0 2px rgba(27,107,74,.2),var(--ombre)}
 .res-ph{position:relative;display:block;background:linear-gradient(135deg,#1b6b4a,#4fb7b3);min-height:170px}
+.res-ph > a{position:absolute;inset:0}
 .res-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ph-nav{position:absolute;top:50%;z-index:3;width:36px;height:36px;margin-top:-18px;border-radius:50%;border:0;background:rgba(255,255,255,.94);color:var(--encre);display:grid;place-items:center;cursor:pointer;opacity:0;transition:opacity .15s;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.ph-nav.prec{left:8px}.ph-nav.suiv{right:8px}
+.res:hover .ph-nav,.ph-nav:focus-visible{opacity:1}
+@media (hover:none){.ph-nav{opacity:.92}}
+.ph-n{position:absolute;bottom:8px;left:8px;z-index:3;background:rgba(10,20,16,.72);color:#fff;border-radius:99px;padding:2px 8px;font-size:12px;font-weight:700}
 .res-corps{padding:14px 16px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
 .res-l1{display:flex;justify-content:space-between;gap:8px;font-size:14px;color:var(--doux);padding-right:42px}
 .res-l1 .etoile{color:var(--encre)}
@@ -202,7 +208,14 @@ a.cat:hover{border-color:var(--vert2);box-shadow:var(--ombre)}
 .alerte-bloc{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:20px;padding:16px;border-radius:var(--r);background:var(--vert-clair);color:var(--encre)}
 .alerte-bloc p{margin:0}
 .rech-carte{position:sticky;top:calc(var(--haut) + var(--barre, 112px));height:calc(100vh - var(--haut) - var(--barre, 112px));height:calc(100dvh - var(--haut) - var(--barre, 112px));isolation:isolate;border-left:1px solid var(--ligne);background:#e8eee9}
-#carteRech{position:absolute;inset:0}
+#carteRech{position:absolute;inset:0;z-index:0}
+.maplibregl-map{font:14px var(--sans)}
+.pm-ic{cursor:pointer}
+.vue-3d{position:absolute;top:12px;right:12px;z-index:3;display:flex;gap:2px;background:#fff;border-radius:99px;padding:3px;box-shadow:var(--ombre2)}
+.vue-3d button{border:0;background:none;min-width:48px;min-height:38px;border-radius:99px;font:800 14px var(--sans);color:var(--encre);cursor:pointer}
+.vue-3d button[aria-pressed="true"]{background:var(--encre);color:#fff}
+.recentrer{position:absolute;top:60px;right:12px;z-index:3;width:44px;height:44px;border-radius:50%;border:0;background:#fff;box-shadow:var(--ombre2);display:grid;place-items:center;cursor:pointer;color:var(--encre)}
+.mini-carte{position:relative}.mini-carte .mc{position:absolute;inset:0;z-index:0}.mini-carte .vue-3d{top:10px;right:10px}
 .carte-attente{position:absolute;inset:0;display:grid;place-items:center;color:var(--doux);font-weight:600;z-index:1}
 .leaflet-container{font:14px var(--sans)}
 .rech-carte .leaflet-tile-pane,.mini-carte .leaflet-tile-pane,.carte-pin .leaflet-tile-pane{filter:saturate(.72) brightness(1.03)}

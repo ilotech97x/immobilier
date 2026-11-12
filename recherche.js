@@ -94,14 +94,15 @@ async function pageRecherche() {
     <div class="rech-corps">
       <section class="rech-liste" aria-labelledby="rechTitre"><div id="rechListe" aria-busy="true"><h1 class="sr" id="rechTitre">Recherche de logements</h1><i class="sq sq-t"></i>${'<i class="sq sq-carte"></i>'.repeat(4)}</div></section>
       <section class="rech-carte" aria-label="Carte des résultats"><div id="carteRech"></div><div class="carte-attente" id="carteAttente">Carte en préparation…</div>
+        ${choix3d('choix3d')}<button type="button" class="recentrer" id="recentrer" aria-label="Recentrer la carte sur les résultats" title="Recentrer sur les résultats">${ico('zone')}</button>
         <button type="button" class="zone-btn" id="zoneBtn" hidden>${ico('zone')} Rechercher dans cette zone</button><div class="apercu" id="apercu" hidden></div></section>
     </div>
     <button type="button" class="bascule" id="bascule"></button>
     ${dialogueFiltres(r)}</div>`);
   barreRapide(); mesurerBarre(); brancherPage();
-  const mq = matchMedia('(min-width: 1024px)'), auChangement = () => { mesurerBarre(); preparerCarte(); RCH?.carte?.invalidateSize(); };
+  const mq = matchMedia('(min-width: 1024px)'), auChangement = () => { mesurerBarre(); preparerCarte(); RCH?.carte?.taille(); };
   mq.addEventListener('change', auChangement); addEventListener('resize', mesurerBarre);
-  surDepart(() => { mq.removeEventListener('change', auChangement); removeEventListener('resize', mesurerBarre); RCH?.carte?.remove(); RCH = null; document.documentElement.style.removeProperty('--barre'); delete window.__carteKaz; });
+  surDepart(() => { mq.removeEventListener('change', auChangement); removeEventListener('resize', mesurerBarre); RCH?.carte?.detruire(); RCH = null; document.documentElement.style.removeProperty('--barre'); delete window.__carteKaz; });
   await chargerResultats();
 }
 async function chargerResultats() {
@@ -160,6 +161,7 @@ function rendreListe() {
       : videRecherche(r, tous.length)}
     <div class="alerte-bloc" data-alerte-bloc hidden><p><b>Rien ne vous convient encore ?</b> Créez une alerte : nous vous prévenons dans votre espace dès qu’un logement correspond.</p><button type="button" class="btn btn-v" data-alerte>${ico('cloche')} Créer une alerte</button></div>`;
   agenceInstallee().then(ok => { if (ok) document.querySelectorAll('#rechListe [data-alerte], #rechListe [data-alerte-bloc]').forEach(b => { b.hidden = false; }); });
+  libelleBascule();
 }
 function videRecherche(r, ailleurs) {
   if (!RCH.d.liste.length) return videLogements();
@@ -171,9 +173,10 @@ function videRecherche(r, ailleurs) {
 }
 function carteResultat(l) {
   const n = RCH.d.notes[l.id], r = RCH.r, nn = r.arrivee && r.depart ? nuits(r.arrivee, r.depart) : 0, lien = `#/logement/${l.id}${qsDates(r)}`;
-  const eq = EQUIP.filter(e => (l.equipements || []).includes(e[0])).slice(0, 4);
+  const eq = EQUIP.filter(e => (l.equipements || []).includes(e[0])).slice(0, 4), phs = (l.photos || []).slice(0, 6).map(photo).filter(Boolean);
   return `<article class="res" data-id="${l.id}">
-    <a class="res-ph" href="${lien}" tabindex="-1" aria-hidden="true">${l.photos?.[0] ? `<img src="${esc(photo(l.photos[0]))}" alt="" loading="lazy">` : '<span class="vide">🏝️</span>'}</a>
+    <div class="res-ph" data-photos="${esc(JSON.stringify(phs))}" data-i="0"><a href="${lien}" tabindex="-1" aria-hidden="true">${phs[0] ? `<img src="${esc(phs[0])}" alt="" loading="lazy">` : '<span class="vide">🏝️</span>'}</a>
+      ${phs.length > 1 ? `<button type="button" class="ph-nav prec" data-ph="-1" aria-label="Photo précédente : ${esc(l.titre)}">${ico('gauche')}</button><button type="button" class="ph-nav suiv" data-ph="1" aria-label="Photo suivante : ${esc(l.titre)}">${ico('droite')}</button><span class="ph-n" aria-hidden="true">1/${phs.length}</span>` : ''}</div>
     <div class="res-corps">
       <div class="res-l1"><span>${esc(l.commune)}${l.quartier ? ' · ' + esc(l.quartier) : ''}</span>${n ? `<span class="etoile">★ ${noteFr(n.moyenne)} (${n.nombre})</span>` : '<span class="tag">Nouveau</span>'}</div>
       <h3 class="res-titre"><a href="${lien}">${esc(l.titre)}</a></h3>
@@ -185,53 +188,150 @@ function carteResultat(l) {
     </div>${coeurBtn(l.id)}</article>`;
 }
 
-// ---------------------------------------------------------------- carte
-async function preparerCarte() {
+// ---------------------------------------------------------------- moteurs de carte : 2D (Leaflet, OpenStreetMap) ou 3D (MapLibre GL JS 5.24, OpenFreeMap, relief)
+// La 3D (vue inclinée, bâtiments en volume, relief) ne se charge que si on la choisit ; le choix est gardé sur l'appareil.
+// Sans WebGL, ou si la 3D ne se charge pas, la carte 2D reste là. Zooms alignés : MapLibre (tuiles de 512 px) = Leaflet − 1.
+const STYLE_3D = 'https://tiles.openfreemap.org/styles/liberty';
+const RELIEF_3D = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
+const LANGUE_3D = { 'NavigationControl.ZoomIn': 'Zoomer', 'NavigationControl.ZoomOut': 'Dézoomer', 'NavigationControl.ResetBearing': 'Remettre le nord en haut',
+  'AttributionControl.ToggleAttribution': 'Sources de la carte', 'AttributionControl.MapFeedback': 'Signaler une erreur de la carte', 'Map.Title': 'Carte',
+  'CooperativeGesturesHandler.WindowsHelpText': 'Ctrl + molette pour zoomer', 'CooperativeGesturesHandler.MacHelpText': '⌘ + molette pour zoomer', 'CooperativeGesturesHandler.MobileHelpText': 'Deux doigts pour déplacer la carte' };
+let webglConnu = null;
+const carte3dPossible = () => webglConnu ?? (webglConnu = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } })());
+function prefere3d(v) { try { if (v !== undefined) localStorage.setItem('kazCarte', v ? '3d' : '2d'); return localStorage.getItem('kazCarte') === '3d'; } catch (e) { return !!v; } }
+function chargerMapLibre() {
+  if (window.maplibregl) return Promise.resolve(window.maplibregl);
+  return new Promise((ok, ko) => {
+    if (!document.querySelector('link[href="lib/maplibre/maplibre-gl.css"]')) { const c = document.createElement('link'); c.rel = 'stylesheet'; c.href = 'lib/maplibre/maplibre-gl.css'; document.head.appendChild(c); }
+    const s = document.createElement('script'); s.src = 'lib/maplibre/maplibre-gl.js'; s.onload = () => window.maplibregl ? ok(window.maplibregl) : ko(new Error('MapLibre absent')); s.onerror = ko; document.head.appendChild(s);
+  });
+}
+// une carte, quel que soit le moteur : centre [lat, lng], zoom à l'échelle Leaflet
+async function creerCarte(el, o) {
+  if (o.troisD && carte3dPossible()) {
+    try { return await carte3D(el, o); }
+    catch (e) { prefere3d(false); el.innerHTML = ''; toast('La carte 3D ne s’affiche pas sur cet appareil : voici la carte 2D.', true); }
+  }
+  return carte2D(el, o);
+}
+async function carte2D(el, o) {
+  const L = await chargerCarte();
+  const m = fondCarte(L, el, o.centre, o.zoom, { scrollWheelZoom: !!o.molette, dragging: o.deplacer !== false });
+  const calque = L.layerGroup().addTo(m); let prog = false, t = null, deplace = null;
+  const sansBouger = f => { prog = true; clearTimeout(t); f(); t = setTimeout(() => { prog = false; }, 450); };
+  m.on('moveend', () => { if (!prog) deplace?.(); });
+  m.on('resize', () => sansBouger(() => {}));   // fenêtre redimensionnée : la personne n'a pas déplacé la carte
+  return { troisD: false,
+    ajuster: (pts, max = 13) => sansBouger(() => m.fitBounds(pts, { padding: [56, 56], maxZoom: max, animate: false })),
+    vue: (lat, lng, z) => sansBouger(() => m.setView([lat, lng], z, { animate: false })),
+    bornes: () => { const b = m.getBounds(); return [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]; },
+    marqueur(lat, lng, html, nom) {
+      const mk = L.marker([lat, lng], { icon: L.divIcon({ className: 'pm-ic', html, iconSize: null }), title: nom, keyboard: true, riseOnHover: true }).addTo(calque);
+      const e = mk.getElement(); e.setAttribute('aria-label', nom); return { el: e, haut: on => mk.setZIndexOffset(on ? 1000 : 0) };
+    },
+    vider: () => calque.clearLayers(),
+    cercle: (lat, lng, r) => L.circle([lat, lng], { radius: r, color: '#1b6b4a', weight: 2, fillColor: '#1b6b4a', fillOpacity: .14 }).addTo(m),
+    taille: () => sansBouger(() => m.invalidateSize()),
+    surDeplacement: f => { deplace = f; }, surClic: f => m.on('click', f),
+    etat: () => { const c = m.getCenter(); return { centre: [c.lat, c.lng], zoom: m.getZoom() }; },
+    detruire: () => m.remove(),
+    setView: (ll, z) => m.setView(ll, z, { animate: false }), getCenter: () => m.getCenter(), inclinaison: () => 0 };   // tests : un déplacement « à la main »
+}
+async function carte3D(el, o) {
+  const ml = await chargerMapLibre();
+  const m = new ml.Map({ container: el, style: STYLE_3D, center: [o.centre[1], o.centre[0]], zoom: Math.max(0, o.zoom - 1), pitch: 55, bearing: -15, maxPitch: 70,
+    attributionControl: { compact: true }, scrollZoom: !!o.molette, dragPan: o.deplacer !== false, cooperativeGestures: !o.molette && matchMedia('(pointer: coarse)').matches, locale: LANGUE_3D });
+  let charge = false, rejeter = null, deplace = null;
+  // une tuile manquante n'encombre pas la console ; un style injoignable (avant le chargement) renvoie à la carte 2D
+  m.on('error', e => { if (!charge && rejeter && !e.sourceId && !e.tile) rejeter(e.error || new Error('Carte 3D indisponible')); });
+  try { await new Promise((ok, ko) => { rejeter = ko; m.once('load', ok); setTimeout(() => ko(new Error('Carte 3D trop lente')), 20000); }); }
+  catch (e) { m.remove(); throw e; }
+  charge = true;
+  m.addControl(new ml.NavigationControl({ visualizePitch: true }), 'top-left');
+  try {   // relief (facultatif) : Terrain Tiles, données ouvertes ; ciel adouci vers l'horizon
+    m.addSource('relief', { type: 'raster-dem', tiles: [RELIEF_3D], tileSize: 256, maxzoom: 13, encoding: 'terrarium',
+      attribution: 'Relief : <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles</a> (SRTM et GMTED2010 : USGS ; ETOPO1 : NOAA)' });
+    m.setTerrain({ source: 'relief', exaggeration: 1.4 });
+    m.setSky?.({ 'sky-color': '#a9d8ec', 'horizon-color': '#f3ece1', 'fog-color': '#f3ece1', 'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.7, 'fog-ground-blend': 0.6 });
+  } catch (e) { /* sans relief, la 3D reste utile */ }
+  // seulement quand la personne déplace, incline, tourne ou zoome la carte (après un glissé, la fin du mouvement d'inertie n'a plus l'événement d'origine)
+  let parGeste = false;
+  ['dragstart', 'rotatestart', 'pitchstart', 'zoomstart'].forEach(t => m.on(t, e => { if (e.originalEvent) parGeste = true; }));
+  m.on('moveend', e => { if (e.originalEvent || parGeste) { parGeste = false; deplace?.(); } });
+  const tous = new Set();
+  return { troisD: true,
+    ajuster: (pts, max = 13) => { const b = new ml.LngLatBounds(); pts.forEach(([la, ln]) => b.extend([ln, la])); m.fitBounds(b, { padding: 70, maxZoom: max - 1, duration: 0, bearing: m.getBearing() }); },
+    vue: (lat, lng, z) => m.jumpTo({ center: [lng, lat], zoom: z - 1 }),
+    bornes: () => { const b = m.getBounds(); return [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]; },
+    marqueur(lat, lng, html, nom) {
+      const e = document.createElement('div'); e.className = 'pm-ic'; e.innerHTML = html; e.tabIndex = 0; e.setAttribute('role', 'button'); e.setAttribute('aria-label', nom); e.title = nom;
+      tous.add(new ml.Marker({ element: e, anchor: 'center' }).setLngLat([lng, lat]).addTo(m)); return { el: e, haut: on => { e.style.zIndex = on ? '5' : ''; } };
+    },
+    vider: () => { tous.forEach(x => x.remove()); tous.clear(); },
+    cercle(lat, lng, r) {
+      const pts = Array.from({ length: 65 }, (_, i) => { const a = i / 32 * Math.PI; return [lng + r / (111320 * Math.cos(lat * Math.PI / 180)) * Math.cos(a), lat + r / 110540 * Math.sin(a)]; });
+      m.addSource('zone', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [pts] } } });
+      m.addLayer({ id: 'zone-fond', type: 'fill', source: 'zone', paint: { 'fill-color': '#1b6b4a', 'fill-opacity': 0.2 } });
+      m.addLayer({ id: 'zone-bord', type: 'line', source: 'zone', paint: { 'line-color': '#1b6b4a', 'line-width': 2 } });
+    },
+    taille: () => m.resize(),
+    surDeplacement: f => { deplace = f; }, surClic: f => m.on('click', f),
+    etat: () => { const c = m.getCenter(); return { centre: [c.lat, c.lng], zoom: m.getZoom() + 1 }; },
+    detruire: () => m.remove(),
+    setView: (ll, z) => m.jumpTo({ center: [ll[1], ll[0]], zoom: z - 1 }), getCenter: () => m.getCenter(), inclinaison: () => m.getPitch() };
+}
+// bouton 2D | 3D posé sur la carte ; absent sans WebGL
+const choix3d = id => carte3dPossible() ? `<div class="vue-3d" role="group" aria-label="Type de carte" id="${id}"><button type="button" data-moteur="2d" aria-pressed="${!prefere3d()}">2D</button><button type="button" data-moteur="3d" aria-pressed="${prefere3d()}">3D</button></div>` : '';
+const marquerChoix = (id, troisD) => document.querySelectorAll(`#${id} [data-moteur]`).forEach(b => b.setAttribute('aria-pressed', String((b.dataset.moteur === '3d') === troisD)));
+
+// ---------------------------------------------------------------- carte de la recherche
+async function preparerCarte(depuis) {
   if (!RCH || RCH.carte || RCH.prepare) return;
   const el = $('#carteRech'); if (!el || !el.offsetWidth) return;   // carte cachée (téléphone, vue « Liste ») : créée au premier affichage
   RCH.prepare = true;
   try {
-    const L = await chargerCarte(); if (!RCH || !document.body.contains(el)) return;
     const c = CENTRES[RCH.terr] || CENTRES.Martinique;
-    const m = fondCarte(L, el, [c[0], c[1]], c[2], { scrollWheelZoom: true, zoomControl: true });
-    Object.assign(RCH, { L, carte: m, calque: L.layerGroup().addTo(m) });
-    $('#carteAttente')?.remove();
-    m.on('moveend', () => { if (RCH && !RCH.prog) $('#zoneBtn').hidden = false; });
-    // fenêtre redimensionnée (ou barre d'adresse du téléphone) : la carte bouge sans que la personne l'ait déplacée
-    m.on('resize', () => { if (!RCH) return; RCH.prog = true; clearTimeout(RCH.progT); RCH.progT = setTimeout(() => { if (RCH) RCH.prog = false; }, 450); });
-    m.on('click', fermerApercu);
-    window.__carteKaz = m;   // tests
-    majCarte(true);
+    const carte = await creerCarte(el, { centre: depuis?.centre || [c[0], c[1]], zoom: depuis?.zoom || c[2], troisD: prefere3d(), molette: true });
+    if (!RCH || !document.body.contains(el)) return carte.detruire();
+    RCH.carte = carte; $('#carteAttente')?.remove();
+    carte.surDeplacement(() => { if (RCH) $('#zoneBtn').hidden = false; });
+    carte.surClic(fermerApercu);
+    window.__carteKaz = carte;   // tests
+    marquerChoix('choix3d', carte.troisD);
+    majCarte(!depuis);
   } catch (e) { const a = $('#carteAttente'); if (a) a.textContent = 'Carte indisponible pour le moment : la liste reste à jour.'; }
   finally { if (RCH) RCH.prepare = false; }
+}
+// 2D ↔ 3D sans perdre l'endroit regardé
+async function changerMoteur(troisD) {
+  if (!RCH?.carte || RCH.carte.troisD === troisD || RCH.prepare) return;
+  prefere3d(troisD);
+  const etat = RCH.carte.etat(); fermerApercu(); RCH.carte.detruire(); RCH.carte = null; RCH.marqueurs = new Map();
+  const neuf = document.createElement('div'); neuf.id = 'carteRech'; $('#carteRech').replaceWith(neuf);
+  await preparerCarte(etat);
 }
 function ajusterCarte() {
   if (!RCH?.carte) return;
   const pts = RCH.res.filter(l => l.pos).map(l => [l.pos.lat, l.pos.lng]);
-  RCH.prog = true; clearTimeout(RCH.progT);
-  if (pts.length) RCH.carte.fitBounds(pts, { padding: [56, 56], maxZoom: 13, animate: false });
-  else { const c = CENTRES[RCH.terr] || CENTRES.Martinique; RCH.carte.setView([c[0], c[1]], c[2], { animate: false }); }
-  RCH.progT = setTimeout(() => { if (RCH) RCH.prog = false; }, 350);
+  if (pts.length) RCH.carte.ajuster(pts); else { const c = CENTRES[RCH.terr] || CENTRES.Martinique; RCH.carte.vue(c[0], c[1], c[2]); }
 }
-const prixCourt = n => Math.round(Number(n)).toLocaleString('fr-FR') + ' €';
+const prixCourt = n => Math.round(Number(n)).toLocaleString('fr-FR') + ' €';
 // un point par emplacement : plusieurs logements au même endroit (même commune sans point précis) = « dès … » et leur nombre
 function majCarte(ajuster) {
   if (!RCH?.carte) return;
-  const L = RCH.L; RCH.calque.clearLayers(); RCH.marqueurs = new Map();
+  RCH.carte.vider(); RCH.marqueurs = new Map();
   const groupes = new Map();
   RCH.res.forEach(l => { if (!l.pos) return; const k = l.pos.lat.toFixed(4) + ',' + l.pos.lng.toFixed(4); if (!groupes.has(k)) groupes.set(k, []); groupes.get(k).push(l); });
   for (const ls of groupes.values()) {
-    const min = Math.min(...ls.map(x => Number(x.prix_nuit))), approx = ls.every(x => x.pos.approx);
+    const min = Math.min(...ls.map(x => Number(x.prix_nuit))), approx = ls.every(x => x.pos.approx), ids = ls.map(x => x.id);
     const texte = ls.length > 1 ? `dès ${prixCourt(min)} <i>${ls.length}</i>` : prixCourt(min);
     const nom = ls.length > 1 ? `${ls.length} logements ${aLieu(ls[0].commune)}, dès ${eur(min)} la nuit` : `${ls[0].titre}, ${eur(min)} la nuit${approx ? ', position approximative' : ''}`;
-    const m = L.marker([ls[0].pos.lat, ls[0].pos.lng], { icon: L.divIcon({ className: 'pm-ic', html: `<span class="pm${approx ? ' approx' : ''}">${texte}</span>`, iconSize: null }), title: nom, keyboard: true, riseOnHover: true });
-    m.on('add', () => { const e = m.getElement(); if (e) { e.setAttribute('aria-label', nom); e.dataset.ids = ls.map(x => x.id).join(','); } });
-    m.on('click', () => selectionner(ls.map(x => x.id), true));
-    m.on('keydown', e => { if (e.originalEvent.key === 'Enter' || e.originalEvent.key === ' ') { e.originalEvent.preventDefault(); selectionner(ls.map(x => x.id), true); } });   // Leaflet ne le fait que pour les marqueurs à bulle
-    m.on('mouseover', () => allumer(ls.map(x => x.id)));
-    m.on('mouseout', () => allumer([]));
-    m.addTo(RCH.calque);
-    ls.forEach(x => RCH.marqueurs.set(x.id, m));
+    const h = RCH.carte.marqueur(ls[0].pos.lat, ls[0].pos.lng, `<span class="pm${approx ? ' approx' : ''}">${texte}</span>`, nom), e = h.el;
+    e.dataset.ids = ids.join(',');
+    e.addEventListener('click', ev => { ev.stopPropagation(); selectionner(ids, true); });
+    e.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); selectionner(ids, true); } });
+    e.addEventListener('mouseover', () => allumer(ids)); e.addEventListener('mouseout', () => allumer([]));
+    ids.forEach(x => RCH.marqueurs.set(x, h));
   }
   if (ajuster && !RCH.r.zone) ajusterCarte();
 }
@@ -240,9 +340,9 @@ function surligner(id) {
   if (!RCH) return;
   const etat = x => RCH.allumes.has(x) || RCH.sel.includes(x);
   document.querySelector(`.res[data-id="${id}"]`)?.classList.toggle('actif', etat(id));
-  const m = RCH.marqueurs.get(id), el = m?.getElement(); if (!el) return;
+  const h = RCH.marqueurs.get(id), el = h?.el; if (!el) return;
   const on = (el.dataset.ids || id).split(',').some(etat);
-  el.querySelector('.pm')?.classList.toggle('actif', on); m.setZIndexOffset(on ? 1000 : 0);
+  el.querySelector('.pm')?.classList.toggle('actif', on); h.haut(on);
 }
 function allumer(ids) {
   if (!RCH) return;
@@ -270,11 +370,18 @@ function appliquer(o = {}) {
   pageEnCours = location.hash;
   RCH.page = PAR_PAGE; fermerApercu(); barreRapide(); rendreListe(); majCarte(!o.garderVue); mesurerBarre();
 }
+// bouton du téléphone : « Carte · 7 » ou « Liste · 7 »
+function libelleBascule() {
+  const b = $('#bascule'); if (!b || !RCH) return;
+  const carte = RCH.r.vue === 'carte', n = RCH.d ? RCH.res.length : null, nb = n === null ? '' : ` · ${n}`;
+  b.innerHTML = `${ico(carte ? 'liste' : 'carte')} ${carte ? 'Liste' : 'Carte'}${nb}`;
+  b.setAttribute('aria-label', carte ? 'Voir la liste des logements' : 'Voir les logements sur la carte');
+}
 function basculerVue(v) {
   RCH.r.vue = v; document.body.classList.toggle('vue-carte', v === 'carte');
   history.replaceState(history.state, '', adresseRecherche(RCH.r)); pageEnCours = location.hash;
-  const b = $('#bascule'); b.innerHTML = v === 'carte' ? `${ico('liste')} Liste` : `${ico('carte')} Carte`; b.setAttribute('aria-label', v === 'carte' ? 'Voir la liste des logements' : 'Voir la carte des logements');
-  if (v === 'carte') { if (!RCH.carte) preparerCarte(); else { RCH.prog = true; RCH.carte.invalidateSize(); if (!RCH.r.zone) ajusterCarte(); else setTimeout(() => { RCH.prog = false; }, 350); } }
+  libelleBascule();
+  if (v === 'carte') { if (!RCH.carte) preparerCarte(); else { RCH.carte.taille(); if (!RCH.r.zone) ajusterCarte(); } }
   else { fermerApercu(); window.scrollTo(0, 0); }
 }
 function brancherPage() {
@@ -301,8 +408,12 @@ function brancherPage() {
   f.addEventListener('submit', e => { e.preventDefault(); relancer(); });
   $('#resume').addEventListener('click', () => { const o = document.querySelector('.rech').classList.toggle('rech-ouvert'); $('#resume').setAttribute('aria-expanded', String(o)); mesurerBarre(); if (o) f.territoire.focus(); });
   $('#bascule').addEventListener('click', () => basculerVue(RCH.r.vue === 'carte' ? 'liste' : 'carte'));
+  document.querySelector('.rech-carte').addEventListener('click', e => {
+    const m = e.target.closest('[data-moteur]'); if (m) return changerMoteur(m.dataset.moteur === '3d');
+    if (e.target.closest('#recentrer')) { $('#zoneBtn').hidden = true; ajusterCarte(); }
+  });
   $('#zoneBtn').addEventListener('click', () => {
-    const b = RCH.carte.getBounds(); r.zone = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]; r.commune = ''; f.commune.value = '';
+    r.zone = RCH.carte.bornes(); r.commune = ''; f.commune.value = '';
     $('#zoneBtn').hidden = true; appliquer({ garderVue: true });
   });
   // barre rapide : équipements, types, zone, favoris, filtres
@@ -320,6 +431,8 @@ function brancherPage() {
   liste.addEventListener('change', e => { if (e.target.id === 'triRech') { r.tri = e.target.value; appliquer({ garderVue: true }); $('#triRech')?.focus(); } });
   liste.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.ph) { const box = b.closest('.res-ph'), l = JSON.parse(box.dataset.photos), i = (Number(box.dataset.i) + Number(b.dataset.ph) + l.length) % l.length;
+      box.dataset.i = i; box.querySelector('img').src = l[i]; box.querySelector('.ph-n').textContent = `${i + 1}/${l.length}`; return; }
     if (b.dataset.terr) { r.territoire = b.dataset.terr; r.zone = null; r.commune = ''; f.commune.value = ''; return appliquer(); }
     if (b.id === 'plusRes') { const avant = RCH.page; RCH.page += PAR_PAGE; $('#resListe').insertAdjacentHTML('beforeend', RCH.res.slice(avant, RCH.page).map(carteResultat).join('')); if (RCH.page >= RCH.res.length) b.parentElement.remove(); else b.textContent = `Afficher ${Math.min(PAR_PAGE, RCH.res.length - RCH.page)} logements de plus`; return; }
     if (b.hasAttribute('data-alerte')) return creerAlerte();
