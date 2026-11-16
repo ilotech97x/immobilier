@@ -1,0 +1,17 @@
+{
+  "name": "Kaz An Nou — séjours et services pour la maison",
+  "short_name": "Kaz An Nou",
+  "description": "Villas, gîtes et appartements de propriétaires vérifiés, et des prestataires de confiance pour votre maison.",
+  "lang": "fr",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0d3b2e",
+  "icons": [
+    { "src": "img/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "img/icone-512-masque.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
