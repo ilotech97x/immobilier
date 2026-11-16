@@ -535,3 +535,33 @@ table.t th{background:var(--sable);font-size:13px;letter-spacing:.3px}
 .f .ligne2{grid-template-columns:repeat(2,minmax(0,1fr))}.f .ligne3{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media (max-width:760px){.f .ligne2,.f .ligne3{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:380px){.wrap{padding:0 14px}.carte-f{padding:18px 16px;margin:18px auto}.budget{grid-template-columns:1fr}.rech-barre .wrap{padding:8px 12px}}
+
+/* ---------------------------------------------------------------- appli : barre du haut des sous-pages, pages qui glissent */
+.retour-app,.titre-app{display:none}
+@media (max-width:900px){
+  body[data-racine=non] .haut .logo{display:none}
+  .retour-app:not([hidden]){display:grid;place-items:center;flex:none;width:44px;height:44px;margin-left:-10px;border:0;border-radius:50%;background:transparent;color:var(--encre);cursor:pointer}
+  .retour-app svg{width:24px;height:24px}.retour-app:active{background:var(--ligne)}
+  body[data-racine=non] .titre-app{display:block;flex:1;min-width:0;font-size:17px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+/* transitions de vue : on anime des images de l'écran, jamais #app ni un ancêtre d'élément fixe (carte, fenêtres) */
+.haut{view-transition-name:haut}.bas{view-transition-name:bas}
+::view-transition-group(haut),::view-transition-group(bas){animation-duration:.2s}
+@media (max-width:900px){
+  ::view-transition-old(root),::view-transition-new(root){animation-duration:.26s;animation-timing-function:cubic-bezier(.32,.72,0,1);animation-fill-mode:both}
+  html[data-sens=avant]::view-transition-old(root){animation-name:vt-recule}
+  html[data-sens=avant]::view-transition-new(root){animation-name:vt-arrive;box-shadow:-12px 0 32px rgba(18,38,31,.14)}
+  html[data-sens=retour]::view-transition-old(root){animation-name:vt-repart;z-index:2;box-shadow:-12px 0 32px rgba(18,38,31,.14)}
+  html[data-sens=retour]::view-transition-new(root){animation-name:vt-revient}
+}
+html[data-sens=onglet]::view-transition-old(root){animation:vt-efface .12s ease both}
+html[data-sens=onglet]::view-transition-new(root){animation:vt-montre .18s ease both}
+@keyframes vt-arrive{from{transform:translateX(100%)}}
+@keyframes vt-recule{to{transform:translateX(-26%);filter:brightness(.94)}}
+@keyframes vt-repart{to{transform:translateX(100%)}}
+@keyframes vt-revient{from{transform:translateX(-26%);filter:brightness(.94)}}
+@keyframes vt-efface{to{opacity:0}}
+@keyframes vt-montre{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}}
+@media (max-width:380px){.galerie-z{margin-left:-14px;margin-right:-14px}}   /* le .wrap n'a plus que 14 px de marge : la galerie pleine largeur ne dépasse plus */
+@media (max-width:900px){.retour-l{display:none}}   /* la barre du haut porte déjà le retour */

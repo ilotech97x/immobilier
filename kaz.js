@@ -254,8 +254,15 @@ function nav() {
 }
 // une page qui répond après qu'on l'a quittée n'écrase pas la suivante (les filtres de la recherche ne changent que la fin de l'adresse)
 let pageEnCours = null;
-const vue = html => { if (pageEnCours !== null && (location.hash || '#/').split('?')[0] !== pageEnCours.split('?')[0]) return; $('#app').innerHTML = html; };
-const chargement = () => vue('<div class="chargement" aria-busy="true">Chargement…</div>');
+let premierRendu = null, aRestaurer = 0;
+const enHaut = y => window.scrollTo({ top: y, left: 0, behavior: 'instant' });
+const vue = html => {
+  if (pageEnCours !== null && (location.hash || '#/').split('?')[0] !== pageEnCours.split('?')[0]) return;
+  $('#app').innerHTML = html;
+  if (aRestaurer) enHaut(aRestaurer);
+  if (premierRendu) { const f = premierRendu; premierRendu = null; f(); }
+};
+const chargement = () => vue('<div class="wrap" style="padding-top:24px" aria-busy="true" aria-label="Chargement"><i class="sq sq-t"></i><i class="sq sq-carte"></i><i class="sq sq-carte"></i><i class="sq sq-l"></i></div>');
 const exigeCompte = () => { if (moi) return true; aller('#/connexion?retour=' + encodeURIComponent(location.hash)); return false; };
 const erreurEtat = e => `<div class="vide-etat erreur-etat" role="alert"><div class="ico">📡</div><h3>Le chargement n’a pas abouti</h3><p class="muted">${esc(erreur(e))}</p><button class="btn btn-p" data-reessayer>Réessayer</button></div>`;
 
@@ -1215,39 +1222,77 @@ let pagesVues = 0, retourArriere = false;
 const defilements = {};
 addEventListener('popstate', () => { retourArriere = true; });
 let pagePrecedente = null;
+// pages « racine » : les onglets du bas et les entrées du menu ; les autres sont des sous-pages (barre du haut avec retour et titre)
+const RACINES = ['#/', '#/recherche', '#/services', '#/proprietaires', '#/retour', '#/compte', '#/compte/favoris', '#/compte/messages', '#/connexion', '#/inscription'];
+const estRacine = h => RACINES.includes(h);
+const parentDe = h => h.startsWith('#/logement') || h.startsWith('#/comparer') ? '#/recherche' : h.startsWith('#/prestation') ? '#/services'
+  : h.startsWith('#/conversation') ? '#/compte/messages' : h.startsWith('#/compte') || h.startsWith('#/avis') ? '#/compte' : '#/';
+function revenir() { if (pagesVues > 1) history.back(); else aller(parentDe(location.hash || '#/')); }
+function barreApp(h) {
+  document.body.dataset.racine = estRacine(h) ? 'oui' : 'non';
+  const r = $('#retourApp'); if (r) r.hidden = estRacine(h);
+  const t = $('#titreApp'), h1 = $('#app h1');
+  if (t) t.textContent = h1 ? h1.textContent.replace(/\s+/g, ' ').trim() : '';
+}
+// la liste de la recherche arrive après la page : on remet la position tant que la page est celle-là et que la main n'a pas touché l'écran
+let touche = false;
+['wheel', 'touchstart', 'keydown'].forEach(e => addEventListener(e, () => { touche = true; }, { passive: true }));
+function retrouver(y, page) {
+  touche = false; let n = 0;
+  const t = setInterval(() => {
+    if (touche || ++n > 14 || (location.hash || '#/') !== page) return clearInterval(t);
+    if (Math.abs(scrollY - y) > 2) enHaut(y);
+  }, 150);
+}
 async function rendre() {
-  if (pagePrecedente !== null) defilements[pagePrecedente] = scrollY;
-  nettoyer();
-  pageEnCours = location.hash || '#/'; pagePrecedente = pageEnCours; pagesVues += 1;
-  const y = retourArriere ? defilements[pageEnCours] || 0 : 0; retourArriere = false;
   const h = (location.hash || '#/').split('?')[0];
-  const [, a, b, c2] = h.split('/');
-  nav(); window.scrollTo(0, 0);
-  document.title = 'Kaz An Nou — Séjours et services pour la maison, aux Antilles et ailleurs';
-  try {
-    if (!a) await pageAccueil();
-    else if (a === 'recherche') await pageRecherche();
-    else if (a === 'comparer') await pageComparer();
-    else if (a === 'proprietaires') await pageProprietaires();
-    else if (a === 'logement' && b) await (PRET ? pageLogement(b) : vue(fermePourLeMoment()));
-    else if (a === 'services') await pageServices(b);
-    else if (a === 'prestation' && b) await (PRET ? pagePrestation(b) : vue(fermePourLeMoment()));
-    else if (a === 'retour') pageRetour();
-    else if (a === 'connexion') pageConnexion();
-    else if (a === 'inscription') pageInscription();
-    else if (a === 'compte') await pageCompte(b, c2);
-    else if (a === 'conversation' && b && c2) await pageConversation(b, c2);
-    else if (a === 'avis' && b && c2) pageAvis(b, c2);
-    else if (a === 'deconnexion') { await sb?.auth.signOut(); await chargerMoi(); toast('À bientôt !'); return aller('#/'); }
-    else vue('<div class="wrap"><div class="vide-etat" style="margin-top:30px"><div class="ico">🧭</div><h3>Page introuvable</h3><a class="btn btn-p" href="#/">Accueil</a></div></div>');
-  } catch (e) { vue(`<div class="wrap" style="padding-top:24px">${erreurEtat(e)}</div>`); }
-  if (y && (location.hash || '#/') === pageEnCours) window.scrollTo(0, y);
-  barreComparer();
+  const prec = pagePrecedente === null ? null : pagePrecedente.split('?')[0];
+  if (pagePrecedente !== null) defilements[pagePrecedente] = scrollY;
+  const recul = retourArriere; retourArriere = false;
+  const sens = prec === null || prec === h ? 'meme' : recul ? 'retour' : estRacine(h) && estRacine(prec) ? 'onglet' : 'avant';
+  pageEnCours = location.hash || '#/'; pagePrecedente = pageEnCours; pagesVues += 1;
+  const executer = async () => {
+    const [, a, b, c2] = h.split('/');
+    aRestaurer = recul ? defilements[pageEnCours] || 0 : 0;
+    nettoyer(); nav(); barreApp(h); enHaut(0);
+    document.title = 'Kaz An Nou — Séjours et services pour la maison, aux Antilles et ailleurs';
+    try {
+      if (!a) await pageAccueil();
+      else if (a === 'recherche') await pageRecherche();
+      else if (a === 'comparer') await pageComparer();
+      else if (a === 'proprietaires') await pageProprietaires();
+      else if (a === 'logement' && b) await (PRET ? pageLogement(b) : vue(fermePourLeMoment()));
+      else if (a === 'services') await pageServices(b);
+      else if (a === 'prestation' && b) await (PRET ? pagePrestation(b) : vue(fermePourLeMoment()));
+      else if (a === 'retour') pageRetour();
+      else if (a === 'connexion') pageConnexion();
+      else if (a === 'inscription') pageInscription();
+      else if (a === 'compte') await pageCompte(b, c2);
+      else if (a === 'conversation' && b && c2) await pageConversation(b, c2);
+      else if (a === 'avis' && b && c2) pageAvis(b, c2);
+      else if (a === 'deconnexion') { await sb?.auth.signOut(); await chargerMoi(); toast('À bientôt !'); return aller('#/'); }
+      else vue('<div class="wrap"><div class="vide-etat" style="margin-top:30px"><div class="ico">🧭</div><h3>Page introuvable</h3><a class="btn btn-p" href="#/">Accueil</a></div></div>');
+    } catch (e) { vue(`<div class="wrap" style="padding-top:24px">${erreurEtat(e)}</div>`); }
+    if (aRestaurer && (location.hash || '#/') === pageEnCours) enHaut(aRestaurer);
+    const cible = aRestaurer; aRestaurer = 0; barreApp(h);
+    if (cible) retrouver(cible, pageEnCours);
+    barreComparer();
+  };
+  const anime = prec !== null && sens !== 'meme' && document.startViewTransition && !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!anime) return executer();
+  // la page glisse dès qu'elle a quelque chose à montrer (au plus tard 150 ms : sa forme en attendant les données)
+  document.documentElement.dataset.sens = sens;
+  let pret; const affichee = new Promise(r => { pret = r; }); premierRendu = pret;
+  const t = document.startViewTransition(() => { const p = executer(); return Promise.race([affichee, p, new Promise(r => setTimeout(r, 150))]); });
+  const fin = () => { if (document.documentElement.dataset.sens === sens) delete document.documentElement.dataset.sens; if (premierRendu === pret) premierRendu = null; };
+  t.ready.catch(() => {}); t.updateCallbackDone.catch(() => {}); t.finished.then(fin, fin);
 }
 
 (async function demarrer() {
   if (!PRET) $('#bandeau').hidden = false;
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   window.addEventListener('hashchange', rendre);
+  $('#retourApp')?.addEventListener('click', revenir);
   if (PRET) {
     sb.auth.onAuthStateChange(async (ev) => {
       if (ev === 'PASSWORD_RECOVERY') { await chargerMoi(); return pageNouveauMdp(); }
