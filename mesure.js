@@ -1,4 +1,4 @@
-/* Mesure d'audience pour ILO CONTROL (commun/mesures.sql) : une vue par page affichée (adresse sans identifiant) et les clics sur
+/* Mesure d'audience pour le Control Panel (commun/mesures.sql) : une vue par page affichée (adresse sans identifiant) et les clics sur
    les boutons et liens principaux. Sans cookie, sans stockage, sans identifiant : seulement des compteurs par jour. Respecte
    « Ne pas me suivre » et le Global Privacy Control du navigateur. L'appli se nomme par <html data-app="…">. */
 (function () {

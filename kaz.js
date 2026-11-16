@@ -440,7 +440,7 @@ function blocEmplacement(l) {
 }
 const MOTIFS_SIG = { faux: 'Annonce fausse ou trompeuse', arnaque: 'Arnaque ou demande de paiement suspecte', illegal: 'Contenu illégal', danger: 'Logement dangereux ou insalubre',
   harcelement: 'Harcèlement ou propos insultants', choquant: 'Contenu choquant', droits: 'Photos ou textes copiés (droits d’auteur)', autre: 'Autre motif' };
-// « Signaler » (règlement européen sur les services numériques) : commun/signalements.sql, traité dans ILO CONTROL
+// « Signaler » (règlement européen sur les services numériques) : commun/signalements.sql, traité dans le Control Panel
 function signalerLogement(l) {
   if (!exigeCompte()) return;
   const d = document.createElement('dialog'); d.className = 'feuille'; d.setAttribute('aria-labelledby', 'tSig');
@@ -746,8 +746,8 @@ function pageNouveauMdp() {
     e.preventDefault();
     try {
       await q(sb.auth.updateUser({ password: e.target.mdp.value })); history.replaceState(null, '', location.pathname + '#/compte');
-      vue(`<div class="wrap"><div class="carte-f" id="mdpChange"><h1>Mot de passe changé</h1><p>Il sert dans toutes les applis IloTech, avec le même email :</p>
-        <div class="actions"><a class="btn btn-p" href="#/compte">Mon compte</a><a class="btn" href="https://ilo-tech.com/woulib/">Woulib</a><a class="btn" href="https://ilo-tech.com/control/">ILO CONTROL</a>
+      vue(`<div class="wrap"><div class="carte-f" id="mdpChange"><h1>Mot de passe changé</h1><p>Il sert dans toutes les applis, avec le même email :</p>
+        <div class="actions"><a class="btn btn-p" href="#/compte">Mon compte</a><a class="btn" href="https://ilo-tech.com/woulib/">Woulib</a><a class="btn" href="https://ilo-tech.com/control/">Control Panel</a>
         <a class="btn" href="https://ilo-tech.com/pass/">EventPass</a><a class="btn" href="https://ilo-tech.com/nexora/">NEXORA</a></div></div></div>`);
     }
     catch (err) { toast(erreur(err), true); }
