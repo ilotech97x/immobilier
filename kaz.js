@@ -224,7 +224,7 @@ async function compter() {
     const [r, d] = await Promise.all([
       role('proprietaire') ? q(sb.from('reservations').select('id, logements!inner(owner)').eq('statut', 'demande').eq('logements.owner', moi.id)) : [],
       role('prestataire') ? q(sb.from('demandes').select('id').eq('statut', 'demande').eq('prestataire_id', moi.id)) : []]);
-    compteurs.resa = r.length + d.length;
+    compteurs.resa = r.length + d.length + await locCompter().catch(() => 0);
     const m = await q(sb.from('messages').select('id').eq('lu', false).neq('de', moi.id));
     compteurs.msgs = m.length;
     // notifications de Kaz An Nou (alertes de recherche) : celles des autres applis restent dans leur cloche
@@ -241,13 +241,14 @@ function nav() {
   const cls = (...p) => on(...p) ? 'class="on" aria-current="page"' : '';
   $('#nav').innerHTML = `
     <a href="#/recherche" ${cls('#/recherche', '#/logement', '#/comparer')}>Séjours</a>
+    ${LOC_ON ? `<a href="#/location" ${cls('#/location')}>Location</a>` : ''}
     <a href="#/services" ${cls('#/services', '#/prestation')}>Services maison</a>
     <a href="#/proprietaires" ${cls('#/proprietaires')}>Propriétaires</a>
     <a href="#/retour" ${cls('#/retour')}>Retour au pays</a>
     ${moi ? `<a href="#/compte" ${cls('#/compte', '#/conversation', '#/avis')}>Mon espace${b(compteurs.resa + compteurs.msgs + compteurs.notifs)}</a>`
           : `<a href="#/connexion" ${cls('#/connexion')}>Connexion</a><a class="btn btn-p btn-s" href="#/inscription">Créer un compte</a>`}`;
   const compteOn = (h.startsWith('#/compte') && !on('#/compte/favoris', '#/compte/messages')) || on('#/connexion', '#/inscription', '#/avis');
-  const liens = [['#/', 'explorer', 'Explorer', 0, h === '#/' || on('#/?', '#/recherche', '#/logement', '#/proprietaires', '#/retour')],
+  const liens = [['#/', 'explorer', 'Explorer', 0, h === '#/' || on('#/?', '#/recherche', '#/logement', '#/location', '#/proprietaires', '#/retour')],
     ['#/services', 'services', 'Services', 0, on('#/services', '#/prestation')], ['#/compte/favoris', 'coeur', 'Favoris', 0, on('#/compte/favoris', '#/comparer')],
     ['#/compte/messages', 'message', 'Messages', compteurs.msgs, on('#/compte/messages', '#/conversation')],
     [moi ? '#/compte' : '#/connexion', 'compte', moi ? 'Compte' : 'Connexion', compteurs.resa + compteurs.notifs, compteOn]];
@@ -268,15 +269,15 @@ const exigeCompte = () => { if (moi) return true; aller('#/connexion?retour=' + 
 const erreurEtat = e => `<div class="vide-etat erreur-etat" role="alert"><div class="ico">📡</div><h3>Le chargement n’a pas abouti</h3><p class="muted">${esc(erreur(e))}</p><button class="btn btn-p" data-reessayer>Réessayer</button></div>`;
 
 // carte d'un logement dans une grille (accueil, favoris) : toute la carte mène à la fiche, le cœur et « Comparer » restent des boutons
-function carteLogement(l, notes, avecComparer = false) {
-  const n = notes?.[l.id];
+function carteLogement(l, notes, avecComparer = false, ctx = '') {
+  const n = notes?.[l.id], lc = locCartePrix(l, ctx);
   return `<article class="carte">
     <div class="ph">${l.photos?.[0] ? `<img src="${esc(photo(l.photos[0]))}" alt="" loading="lazy">` : '<span class="vide" aria-hidden="true">🏝️</span>'}</div>
     ${coeurBtn(l.id)}
     <div class="corps"><div class="l1"><span>${lieu(l)}</span>${n ? `<span class="etoile">★ ${noteFr(n.moyenne)} (${n.nombre})</span>` : '<span class="tag">Nouveau</span>'}</div>
       <h3 class="carte-t"><a href="#/logement/${l.id}">${esc(l.titre)}</a></h3>
-      <div class="muted petit">${esc(TYPES[l.type] || '')} · ${l.chambres} ch. · ${l.voyageurs} voyageurs</div>
-      <div class="prix"><b>${eur(l.prix_nuit)}</b> <span class="muted">/ nuit</span></div>
+      ${lc?.det || `<div class="muted petit">${esc(TYPES[l.type] || '')} · ${l.chambres} ch. · ${l.voyageurs} voyageurs</div>`}
+      ${lc?.prix || `<div class="prix"><b>${eur(l.prix_nuit)}</b> <span class="muted">/ nuit</span></div>`}
       ${avecComparer ? `<button class="lien comp-l" data-comparer="${l.id}" aria-pressed="${compares().includes(l.id)}">${ico('comparer')} Comparer</button>` : ''}</div></article>`;
 }
 async function notesDe(ids) {
@@ -317,7 +318,7 @@ document.addEventListener('click', async ev => {
 // ---------------------------------------------------------------- accueil
 const RAPIDES = [['eq=vue_mer', '🌊', 'Vue mer'], ['eq=piscine', '🏊', 'Piscine'], ['eq=plage', '🏖️', 'Plage à pied'], ['types=villa', '🏡', 'Villas'], ['types=gite', '🌿', 'Gîtes'],
   ['types=appartement', '🏢', 'Appartements'], ['types=bungalow', '🛖', 'Bungalows'], ['eq=starlink', '🛰️', 'Starlink'], ['eq=animaux', '🐾', 'Animaux acceptés'], ['eq=pmr', '♿', 'Accessible PMR']];
-const ONGLETS = on => `<nav class="onglets" aria-label="Kaz An Nou">${[['#/', '🏝️ Séjours'], ['#/services', '🧹 Services maison'], ['#/proprietaires', '🔑 Propriétaires'], ['#/retour', '✈️ Retour au pays']]
+const ONGLETS = on => `<nav class="onglets" aria-label="Kaz An Nou">${[['#/', '🏝️ Séjours'], ...(LOC_ON ? [['#/location', '🔑 Location']] : []), ['#/services', '🧹 Services maison'], ['#/proprietaires', '🔑 Propriétaires'], ['#/retour', '✈️ Retour au pays']]
   .map(([h, t]) => `<a href="${h}" ${h === on ? 'class="on" aria-current="page"' : ''}>${t}</a>`).join('')}</nav>`;
 function barreRecherche(p = {}) {
   const t = p.territoire ?? 'Martinique';
@@ -369,10 +370,11 @@ async function pageAccueil() {
         <a class="btn btn-p" href="offres.html#visite-3d">Essayer la visite 3D</a></div></section>
     </div>`);
   brancherRecherche();
+  if (LOC_ON && $('#outils')) $('#outils').insertAdjacentHTML('afterbegin', `<a class="outil" href="#/location"><span class="ico" aria-hidden="true">🔑</span><span><b>Location</b><span>Meublée ou vide, au mois ou à l’année. Annonces gratuites, sans frais d’agence.</span></span></a>`);
   agenceInstallee().then(ok => { if (ok && $('#outils')) $('#outils').insertAdjacentHTML('beforeend', `<a class="outil" href="#/compte/alertes"><span class="ico" aria-hidden="true">🔔</span><span><b>Alertes</b><span>Prévenu dans votre espace dès qu’un logement correspond à vos critères.</span></span></a>`); });
   if (!PRET) { $('#liste').outerHTML = videLogements(); return; }
   try {
-    const l = await q(sb.from('logements').select('*').eq('statut', 'publie').order('created_at', { ascending: false }).limit(8)), n = await notesDe(l.map(x => x.id));
+    const l = await q(LOC_ON ? sb.from('logements').select('*').eq('statut', 'publie').neq('formule', 'location').order('created_at', { ascending: false }).limit(8) : sb.from('logements').select('*').eq('statut', 'publie').order('created_at', { ascending: false }).limit(8)), n = await notesDe(l.map(x => x.id));
     const el = $('#liste'); if (!el) return;
     el.removeAttribute('aria-busy'); el.className = l.length ? 'grille' : ''; el.innerHTML = l.length ? l.map(x => carteLogement(x, n)).join('') : videLogements();
   } catch (e) { if ($('#liste')) { $('#liste').className = ''; $('#liste').innerHTML = erreurEtat(e); } }
@@ -479,23 +481,26 @@ async function pageLogement(id) {
       q(sb.from('avis').select('note, texte, created_at').eq('logement_id', id).order('created_at', { ascending: false }).limit(20)),
       notesDe([id])]);
     const p = param(), ph = l.photos || [], note = n[id], eqs = EQUIP.filter(e => (l.equipements || []).includes(e[0]));
+    const sej = locSejour(l), locOK = locEstLocation(l);   // location seule : pas de réservation à la nuit
     const prenomH = esc(hote?.prenom || 'le propriétaire'), long = (l.description || '').length > 650;
     document.title = `${l.titre} — ${l.commune} | Kaz An Nou`;
     const faits = [['maison', esc(TYPES[l.type] || 'Logement')], ['voyageurs', `${l.voyageurs} voyageur${s_(l.voyageurs)}`], ['lit', `${l.chambres ? `${l.chambres} chambre${s_(l.chambres)}` : 'Pièce unique'} · ${l.lits} lit${s_(l.lits)}`],
       ['bain', `${l.sdb} salle${s_(l.sdb)} d’eau`], ['lune', `${l.min_nuits} nuit${s_(l.min_nuits)} minimum`]];
-    const savoir = [['🕒', `Arrivée ${esc(l.arrivee ? 'à partir de ' + l.arrivee : 'à convenir')} · départ ${esc(l.depart ? 'avant ' + l.depart : 'à convenir')}`],
+    if (!sej) { faits.length = 0; faits.push(['maison', esc(TYPES[l.type] || 'Logement')], ['lit', `${l.chambres ? `${l.chambres} chambre${s_(l.chambres)}` : 'Pièce unique'} · ${l.lits} lit${s_(l.lits)}`], ['bain', `${l.sdb} salle${s_(l.sdb)} d’eau`]); }
+    const savoir = !sej ? [['🔑', 'Visite sur demande : le propriétaire répond, puis vous convenez ensemble d’un rendez-vous.'], ['🧾', 'Aucun frais d’agence ni de dossier : l’annonce est gratuite et IloTech ne perçoit aucune commission sur la location.'],
+      ['⚠️', 'Ne versez jamais d’argent avant d’avoir visité le logement et signé le bail.']] : [['🕒', `Arrivée ${esc(l.arrivee ? 'à partir de ' + l.arrivee : 'à convenir')} · départ ${esc(l.depart ? 'avant ' + l.depart : 'à convenir')}`],
       ['🔁', l.annulation && ANNULATION[l.annulation] ? `<b>Annulation ${ANNULATION[l.annulation][0].toLowerCase()}</b> : ${ANNULATION[l.annulation][1]} Passé ce délai, l’hôte peut vous demander tout ou partie du prix convenu.` : 'Conditions d’annulation : à convenir avec l’hôte avant qu’il confirme.'],
       ['💶', 'Paiement directement à l’hôte, après sa confirmation. La taxe de séjour de la commune peut s’ajouter : l’hôte la collecte.'],
       ...(l.numero_enregistrement ? [['🏷️', `Meublé de tourisme déclaré en mairie : n° d’enregistrement <b>${esc(l.numero_enregistrement)}</b>`]] : [])];
     vue(`<div class="wrap fiche-tete">
-      <a class="retour-l" href="#/recherche${qsDates(p)}" id="retourFiche">${ico('gauche')} Retour aux logements</a>
+      <a class="retour-l" href="${sej ? '#/recherche' + qsDates(p) : '#/location'}" id="retourFiche">${ico('gauche')} Retour aux logements</a>
       <div class="ligne-t"><div><h1>${esc(l.titre)}</h1>
         <div class="meta"><span>${ico('pin')} ${l.quartier ? esc(l.quartier) + ', ' : ''}${lieu(l)}</span>${note ? `<span class="etoile">★ ${noteFr(note.moyenne)} · ${note.nombre} avis</span>` : '<span class="tag">Nouveau</span>'}${hote?.valide ? '<span class="tag ok">✓ Hôte vérifié</span>' : ''}${l.statut !== 'publie' ? tag(ST_ANN[l.statut]) : ''}</div></div>
         <div class="barre-act"><button type="button" class="btn btn-s btn-l" id="partager">${ico('partage')} Partager</button>
           <button type="button" class="btn btn-s btn-l ${favoris.has(l.id) ? 'on' : ''}" data-fav="${l.id}" aria-pressed="${favoris.has(l.id)}">${ico('coeur')} <span>${favoris.has(l.id) ? 'Enregistré' : 'Enregistrer'}</span></button>
           <button type="button" class="btn btn-s btn-l" data-comparer="${l.id}" aria-pressed="${compares().includes(l.id)}">${ico('comparer')} Comparer</button></div></div>
       ${galerie(l, ph)}</div>
-    <div class="wrap"><nav class="ancres" aria-label="Sections de l’annonce">${[['apercu', 'Aperçu'], ['equipements', 'Équipements'], ['savoir', 'Bon à savoir'], ['emplacement', 'Emplacement'], ['disponibilites', 'Disponibilités'], ['avis', 'Avis']]
+    <div class="wrap"><nav class="ancres" aria-label="Sections de l’annonce">${[['apercu', 'Aperçu'], ...(locOK ? [['location', 'Location']] : []), ['equipements', 'Équipements'], ['savoir', 'Bon à savoir'], ['emplacement', 'Emplacement'], ...(sej ? [['disponibilites', 'Disponibilités']] : []), ['avis', 'Avis']]
       .map(([k, t]) => `<button type="button" data-ancre="${k}">${t}</button>`).join('')}</nav>
     <div class="fiche"><div>
       <section id="apercu"><h2>${esc(TYPES[l.type] || 'Logement')} ${esc(aLieu(l.commune))}</h2>
@@ -507,18 +512,19 @@ async function pageLogement(id) {
         ${l.video ? (/\.mp4(\?|$)/i.test(l.video) ? `<div class="bloc"><h3>🎬 Visite en vidéo</h3><video class="video-log" src="${esc(l.video)}" controls playsinline preload="metadata" ${ph[0] ? `poster="${esc(photo(ph[0]))}"` : ''}></video></div>`
           : `<p><a class="btn btn-v" href="${esc(l.video)}" target="_blank" rel="noopener">🎬 Voir la vidéo</a></p>`) : ''}
         ${l.visite3d ? `<p><a class="btn btn-v" href="${esc(l.visite3d)}" target="_blank" rel="noopener">🧊 Visite virtuelle 3D</a></p>` : ''}</section>
+      ${locOK ? locBloc(l) : ''}
       <section id="equipements" class="bloc"><h2>Équipements</h2><div class="equip">${eqs.map(e => `<span><span aria-hidden="true">${e[1]}</span> ${esc(e[2])}</span>`).join('') || '<span class="muted">Non renseignés</span>'}</div></section>
       <section id="savoir" class="bloc"><h2>Bon à savoir</h2><div class="savoir">${savoir.map(([i, t]) => `<div><span aria-hidden="true">${i}</span><span>${t}</span></div>`).join('')}</div>
         ${l.regles ? `<h3 style="margin-top:16px">Règles de la maison</h3><p class="texte-long">${esc(l.regles)}</p>` : ''}</section>
       ${blocEmplacement(l)}
-      <section id="disponibilites" class="bloc"><h2>Disponibilités</h2><div id="cal">${calendrier(prises, p.arrivee, p.depart)}</div></section>
+      ${sej ? `<section id="disponibilites" class="bloc"><h2>Disponibilités</h2><div id="cal">${calendrier(prises, p.arrivee, p.depart)}</div></section>` : ''}
       <section id="avis" class="bloc"><h2>${avis.length && note ? `★ ${noteFr(note.moyenne)} · ${avis.length} avis` : 'Avis'}</h2>
         <p class="muted petit">Avis vérifiés : seuls les voyageurs qui ont séjourné ici peuvent en laisser un, une fois le séjour terminé.</p>
         ${avis.length ? avis.map(a => `<div class="avis1"><b aria-label="${a.note} sur 5">${'★'.repeat(a.note)}${'☆'.repeat(5 - a.note)}</b><span>${esc(a.texte)}</span><small class="muted">${jourLong(a.created_at.slice(0, 10))}</small></div>`).join('')
           : '<p class="muted">Pas encore d’avis pour ce logement.</p>'}</section>
       <p class="signaler"><button type="button" class="lien" id="signaler">${ico('drapeau')} Signaler cette annonce</button></p>
     </div>
-    <aside class="resa" id="resa" aria-labelledby="resaTitre">
+    ${!sej ? locAside(l) : `<aside class="resa" id="resa" aria-labelledby="resaTitre">
       <div class="resa-tete"><div><span class="p">${eur(l.prix_nuit)}</span> <span class="muted">/ nuit</span></div><button type="button" class="rond resa-fermer" id="fermerResa" aria-label="Fermer la demande">${ico('fermer')}</button></div>
       <h2 id="resaTitre" class="sr">Demande de réservation</h2>
       <form id="fResa"><div class="champs2">
@@ -529,10 +535,12 @@ async function pageLogement(id) {
         <div class="calcul" id="calcul" aria-live="polite"></div>
         <button class="btn btn-p" style="width:100%;margin-top:14px" ${moi?.id === l.owner ? 'disabled' : ''}>Demander à réserver</button>
         <ul class="rassure"><li>${ico('check')} Aucun paiement maintenant : ${prenomH} confirme d’abord.</li><li>${ico('check')} Vous réglez ensuite directement l’hôte, comme convenu ensemble.</li><li>${ico('check')} Une messagerie pour tout organiser avant d’arriver.</li></ul></form>
-      <div class="secondaire"><a href="${wa(WA, `Bonjour Kaz An Nou, je voudrais une visite vidéo en direct du logement « ${l.titre} » (${l.commune}) : https://immo.ilo-tech.com/#/logement/${l.id}`)}" target="_blank" rel="noopener">📹 Demander une visite vidéo en direct</a></div></aside>
+      <div class="secondaire"><a href="${wa(WA, `Bonjour Kaz An Nou, je voudrais une visite vidéo en direct du logement « ${l.titre} » (${l.commune}) : https://immo.ilo-tech.com/#/logement/${l.id}`)}" target="_blank" rel="noopener">📹 Demander une visite vidéo en direct</a></div></aside>`}
     </div></div>
-    <div class="barre-resa"><div><b>${eur(l.prix_nuit)}</b> <span class="muted">/ nuit</span><small id="barreDates">Ajoutez vos dates</small></div><button type="button" class="btn btn-p" id="ouvrirResa" aria-controls="resa" aria-expanded="false">Demander à réserver</button></div>`);
+    ${!sej ? locBarre(l) : `<div class="barre-resa"><div><b>${eur(l.prix_nuit)}</b> <span class="muted">/ nuit</span><small id="barreDates">Ajoutez vos dates</small></div><button type="button" class="btn btn-p" id="ouvrirResa" aria-controls="resa" aria-expanded="false">Demander à réserver</button></div>`}`);
+    if (locOK) locBrancher(l, hote);
 
+    if (sej) {
     const f = $('#fResa'); let decal = 0;
     const maj = () => {
       const d = Object.fromEntries(new FormData(f));
@@ -566,6 +574,7 @@ async function pageLogement(id) {
     $('#ouvrirResa').addEventListener('click', () => { resa.classList.add('ouverte'); document.body.appendChild(voile); document.body.classList.add('sans-defil'); $('#ouvrirResa').setAttribute('aria-expanded', 'true'); setTimeout(() => f.debut.focus(), 60); });
     $('#fermerResa').addEventListener('click', fermer); voile.addEventListener('click', fermer);
     const echap = e => { if (e.key === 'Escape') fermer(); }; document.addEventListener('keydown', echap); surDepart(() => document.removeEventListener('keydown', echap));
+    }
     // photos, description, partage, signalement, retour à la recherche
     document.querySelectorAll('[data-zoom]').forEach(b => b.addEventListener('click', () => visionneuse(ph.map(photo), Number(b.dataset.zoom), l.titre, b)));
     const gal = $('#galerie'), cpt = $('#compteurPh');
@@ -767,8 +776,8 @@ const fermePourLeMoment = () => `<div class="wrap"><div class="carte-f"><h1>Ouve
 // ---------------------------------------------------------------- espace compte
 const MENUS = (agence = false) => [
   ['', 'Tableau de bord'], ['voyages', 'Mes séjours'], ['services', 'Mes demandes de services'], ['favoris', 'Favoris'], ...(agence ? [['alertes', 'Mes alertes']] : []),
-  ['notifs', 'Notifications', compteurs.notifs], ['messages', 'Messages', compteurs.msgs], ['profil', 'Mon profil'],
-  ...(role('proprietaire') ? [['sep', 'Propriétaire'], ['logements', 'Mes logements'], ['recues', 'Réservations reçues'], ['carnet', 'Carnet du logement']] : []),
+  ...(LOC_ON ? [['location', 'Mes demandes de location']] : []), ['notifs', 'Notifications', compteurs.notifs], ['messages', 'Messages', compteurs.msgs], ['profil', 'Mon profil'],
+  ...(role('proprietaire') ? [['sep', 'Propriétaire'], ['logements', 'Mes logements'], ['recues', 'Réservations reçues'], ...(LOC_ON ? [['locrecues', 'Demandes de location']] : []), ['carnet', 'Carnet du logement']] : []),
   ...(role('prestataire') ? [['sep', 'Prestataire'], ['prestations', 'Mes prestations'], ['demandes', 'Demandes reçues']] : []),
   ...(!role('proprietaire') || !role('prestataire') ? [['partenaire', 'Devenir partenaire']] : []),
   ...(profil?.role === 'admin' ? [['sep', 'Administration'], ['admin', 'Validation et suivi']] : [])];
@@ -784,7 +793,7 @@ async function pageCompte(onglet, sous) {
     <a href="#/deconnexion">Se déconnecter</a></nav><div id="contenu" class="chargement">Chargement…</div></div>`);
   const c = $('#contenu'); c.className = '';
   const pages = { '': ongletAccueil, voyages: ongletVoyages, services: ongletMesDemandes, favoris: ongletFavoris, alertes: ongletAlertes, notifs: ongletNotifs, messages: ongletMessages, profil: ongletProfil, partenaire: ongletPartenaire,
-    logements: ongletLogements, recues: ongletRecues, carnet: ongletCarnet, prestations: ongletPrestations, demandes: ongletDemandesRecues, admin: ongletAdmin };
+    logements: ongletLogements, recues: ongletRecues, carnet: ongletCarnet, prestations: ongletPrestations, demandes: ongletDemandesRecues, admin: ongletAdmin, ...(LOC_ON ? { location: ongletLocMesDemandes, locrecues: ongletLocRecues } : {}) };
   try { await (pages[onglet || ''] || ongletAccueil)(c, sous); } catch (e) { c.innerHTML = `<p>${esc(erreur(e))}</p>`; }
 }
 
@@ -918,7 +927,7 @@ async function ongletLogements(c, sous) {
   const l = await q(sb.from('logements').select('*').eq('owner', moi.id).order('created_at', { ascending: false }));
   c.innerHTML = `<div class="titre-s"><h1>Mes logements</h1><a class="btn btn-p" href="#/compte/logements/nouveau">+ Ajouter</a></div>
     ${l.length ? l.map(x => `<div class="ligne-l">${x.photos[0] ? `<img class="mini" src="${esc(photo(x.photos[0]))}" alt="">` : '<div class="mini"></div>'}
-      <div><b>${esc(x.titre)}</b> ${tag(ST_ANN[x.statut])}<div class="muted petit">${lieu(x)} · ${eur(x.prix_nuit)} / nuit · ${x.photos.length} photo${x.photos.length > 1 ? 's' : ''}</div>
+      <div><b>${esc(x.titre)}</b> ${tag(ST_ANN[x.statut])}<div class="muted petit">${lieu(x)} · ${locResume(x)} · ${x.photos.length} photo${x.photos.length > 1 ? 's' : ''}</div>
         ${x.statut === 'refuse' && x.motif_refus ? `<div class="petit" style="color:var(--ko)">Motif : ${esc(x.motif_refus)}</div>` : ''}</div>
       <div class="actions"><a class="btn btn-s" href="#/compte/logements/${x.id}">Modifier</a><a class="btn btn-s" href="#/logement/${x.id}">Voir</a><a class="btn btn-s" href="#/compte/carnet/${x.id}">Carnet</a>
         ${['brouillon', 'refuse'].includes(x.statut) ? `<button class="btn btn-s btn-v" data-envoi="${x.id}">Envoyer en validation</button>` : ''}
@@ -958,6 +967,7 @@ function placerSurCarte(l) {
 }
 async function formLogement(c, id) {
   const avecVideo = !(await sb.from('logements').select('video').limit(1)).error;   // colonne ajoutée par la mise à jour de la base
+  const LOC = await locInstallee();   // location.sql : formule, loyer, mentions obligatoires
   const agence = await agenceInstallee();   // agence.sql : position sur la carte, numéro d'enregistrement, annulation
   const l = id ? await q(sb.from('logements').select('*').eq('id', id).single()) : { titre: '', description: '', type: 'villa', territoire: profil.territoire || 'Martinique', commune: profil.commune || '', chambres: 1, lits: 1, sdb: 1, voyageurs: 2, prix_nuit: '', menage: 0, min_nuits: 1, equipements: [], photos: [], arrivee: '16 h', depart: '11 h', regles: '', visite3d: '', quartier: '' };
   let photos = [...l.photos];
@@ -968,8 +978,9 @@ async function formLogement(c, id) {
       <div class="ligne2"><label>Type<select name="type">${opts(TYPES, l.type)}</select></label><label>Quartier <span class="aide">(facultatif)</span><input name="quartier" maxlength="80" value="${esc(l.quartier || '')}"></label></div>
       <div class="ligne2">${champsLieu(l.territoire, l.commune, 'villesL')}</div>
       <div class="ligne3"><label>Voyageurs max<input type="number" name="voyageurs" min="1" max="40" value="${l.voyageurs}"></label><label>Chambres<input type="number" name="chambres" min="0" max="30" value="${l.chambres}"></label><label>Lits<input type="number" name="lits" min="0" max="60" value="${l.lits}"></label></div>
-      <div class="ligne3"><label>Salles d’eau<input type="number" name="sdb" min="0" max="30" value="${l.sdb}"></label><label>Prix par nuit (€)<input type="number" name="prix_nuit" required min="1" max="20000" step="1" value="${esc(l.prix_nuit)}"></label><label>Frais de ménage (€)<input type="number" name="menage" min="0" max="2000" value="${l.menage}"></label></div>
-      <div class="ligne3"><label>Nuits minimum<input type="number" name="min_nuits" min="1" max="90" value="${l.min_nuits}"></label><label>Arrivée<input name="arrivee" maxlength="20" value="${esc(l.arrivee || '')}"></label><label>Départ<input name="depart" maxlength="20" value="${esc(l.depart || '')}"></label></div>
+      ${LOC ? locChampsForm(l) : ''}
+      <div class="ligne3"><label>Salles d’eau<input type="number" name="sdb" min="0" max="30" value="${l.sdb}"></label><label class="sej">Prix par nuit (€)<input type="number" name="prix_nuit" required min="1" max="20000" step="1" value="${esc(l.prix_nuit)}"></label><label class="sej">Frais de ménage (€)<input type="number" name="menage" min="0" max="2000" value="${l.menage}"></label></div>
+      <div class="ligne3 sej"><label>Nuits minimum<input type="number" name="min_nuits" min="1" max="90" value="${l.min_nuits}"></label><label>Arrivée<input name="arrivee" maxlength="20" value="${esc(l.arrivee || '')}"></label><label>Départ<input name="depart" maxlength="20" value="${esc(l.depart || '')}"></label></div>
       <label>Description<textarea name="description" maxlength="5000" style="min-height:160px">${esc(l.description)}</textarea></label>
       <fieldset class="f" style="border:0;padding:0;margin:0"><legend style="font-weight:600;margin-bottom:6px">Équipements</legend><div class="cases">${EQUIP.map(([k, i, t]) => `<label><input type="checkbox" name="eq" value="${k}" ${l.equipements.includes(k) ? 'checked' : ''}> ${i} ${esc(t)}</label>`).join('')}</div></fieldset>
       <label>Règles de la maison<textarea name="regles" maxlength="2000" placeholder="Non-fumeur, fêtes interdites, animaux…">${esc(l.regles || '')}</textarea></label>
@@ -985,10 +996,12 @@ async function formLogement(c, id) {
       <label>Lien de visite virtuelle 3D <span class="aide">(facultatif, https://…)</span><input name="visite3d" type="url" pattern="https://.*" value="${esc(l.visite3d || '')}"></label>
       ${avecVideo ? '' : '<!--'}<label>Lien d’une vidéo <span class="aide">(facultatif : fichier .mp4, YouTube, Facebook… en https://)</span><input name="video" type="url" pattern="https://.*" maxlength="300" value="${esc(l.video || '')}"></label>${avecVideo ? '' : '-->'}
       <div><b>Photos</b> <span class="aide">(jusqu’à 20 ; la première est la photo principale)</span><div class="photos-ed" id="ph" style="margin:8px 0"></div><input type="file" id="ajoutPh" accept="image/*" multiple></div>
+      <p class="petit" id="erreursForm" role="alert" style="color:var(--ko)" hidden></p>
       <div class="actions"><button class="btn btn-p" name="envoi" value="en_attente">${id && l.statut === 'publie' ? 'Enregistrer' : 'Enregistrer et envoyer en validation'}</button>${!id || l.statut !== 'publie' ? '<button class="btn" name="envoi" value="brouillon">Garder en brouillon</button>' : ''}
         ${id && ['brouillon', 'refuse'].includes(l.statut) ? '<button type="button" class="btn btn-ko" id="supprLog">Supprimer</button>' : ''}${id && l.statut === 'publie' ? '<button type="button" class="btn btn-ko" id="archLog">Retirer de la location</button>' : ''}</div>
       <p class="muted petit">Changer le titre, la description ou les photos d’une annonce en ligne la renvoie en validation (sous 48 h).</p></form>`;
   dessinerPhotos(); brancherLieux();
+  if (LOC) locBrancherForm($('#fLog'));
   if (agence) placerSurCarte(l);
   $('#ph').addEventListener('click', e => { const b = e.target.closest('[data-suppr]'); if (b) { photos.splice(Number(b.dataset.suppr), 1); dessinerPhotos(); } });
   $('#ajoutPh').addEventListener('change', async e => {
@@ -1001,9 +1014,15 @@ async function formLogement(c, id) {
   f.addEventListener('submit', async e => {
     e.preventDefault(); const d = Object.fromEntries(new FormData(f)); const envoi = e.submitter?.value || 'en_attente';
     const ligne = { titre: d.titre.trim(), type: d.type, territoire: d.territoire, commune: d.commune.trim(), quartier: d.quartier.trim() || null, voyageurs: +d.voyageurs, chambres: +d.chambres, lits: +d.lits, sdb: +d.sdb,
-      prix_nuit: +d.prix_nuit, menage: +d.menage || 0, min_nuits: +d.min_nuits, arrivee: d.arrivee.trim() || null, depart: d.depart.trim() || null, description: d.description.trim(),
+      prix_nuit: LOC && d.formule === 'location' ? null : +d.prix_nuit, menage: +d.menage || 0, min_nuits: +d.min_nuits, arrivee: d.arrivee.trim() || null, depart: d.depart.trim() || null, description: d.description.trim(),
       equipements: new FormData(f).getAll('eq'), regles: d.regles.trim() || null, visite3d: d.visite3d.trim() || null, ...(avecVideo ? { video: (d.video || '').trim() || null } : {}), photos,
       ...(agence ? { lat: d.lat === '' ? null : Number(d.lat), lng: d.lng === '' ? null : Number(d.lng), numero_enregistrement: (d.numero_enregistrement || '').trim().toUpperCase() || null, annulation: d.annulation || null } : {}) };
+    if (LOC) Object.assign(ligne, locLigne(d));
+    const eF = $('#erreursForm'); if (eF) eF.hidden = true;
+    if (LOC && envoi === 'en_attente') {
+      const er = locErreurs(d);
+      if (er.length) { eF.innerHTML = er.map(esc).join('<br>'); eF.hidden = false; eF.scrollIntoView({ block: 'center' }); return toast(er[0], true); }
+    }
     if (!(id && l.statut === 'publie')) ligne.statut = envoi;
     if (envoi === 'en_attente' && !photos.length) return toast('Ajoutez au moins une photo avant l’envoi en validation.', true);
     try {
@@ -1196,7 +1215,7 @@ async function ongletAdmin(c) {
       ${p.siret ? `<a class="petit" href="https://annuaire-entreprises.data.gouv.fr/rechercher?terme=${encodeURIComponent(p.siret.replace(/\s/g, ''))}" target="_blank" rel="noopener">Vérifier le SIRET ↗</a>` : ''}</div>
       <div class="actions"><button class="btn btn-s btn-v" data-valider-p="${p.id}" data-role="${p.demande_role}">Valider</button><button class="btn btn-s btn-ko" data-refuser-p="${p.id}">Refuser</button></div></div>`).join('') : '<p class="muted">Aucune demande.</p>'}
     <h3>Logements à valider (${logs.length})</h3>
-    ${logs.length ? logs.map(l => `<div class="ligne-l">${l.photos[0] ? `<img class="mini" src="${esc(photo(l.photos[0]))}" alt="">` : '<div class="mini"></div>'}<div><b><a href="#/logement/${l.id}">${esc(l.titre)}</a></b><div class="muted petit">${esc(l.commune)} · ${eur(l.prix_nuit)} / nuit · ${l.photos.length} photos · ${tel(l.owner)}</div>
+    ${logs.length ? logs.map(l => `<div class="ligne-l">${l.photos[0] ? `<img class="mini" src="${esc(photo(l.photos[0]))}" alt="">` : '<div class="mini"></div>'}<div><b><a href="#/logement/${l.id}">${esc(l.titre)}</a></b><div class="muted petit">${esc(l.commune)} · ${locResume(l)}${locEstLocation(l) ? ` · ${l.surface_m2 || '?'} m² · ${l.meuble ? 'meublé' : 'vide'} · DPE ${l.dpe || '?'} · GES ${l.ges || '?'} · dépôt ${l.depot_garantie ?? '?'} €` : ''} · ${l.photos.length} photos · ${tel(l.owner)}</div>
         <div class="petit">${'lat' in l ? `${l.lat != null ? '📍 placé sur la carte' : '📍 pas de point (commune)'} · ${l.numero_enregistrement ? 'n° d’enregistrement ' + esc(l.numero_enregistrement) : '⚠️ sans n° d’enregistrement'} · annulation ${l.annulation ? esc(ANNULATION[l.annulation]?.[0] || l.annulation).toLowerCase() : 'à convenir'}` : ''}</div></div>
       <div class="actions"><button class="btn btn-s btn-v" data-pub-l="${l.id}">Publier</button><button class="btn btn-s btn-ko" data-ref-l="${l.id}">Refuser</button></div></div>`).join('') : '<p class="muted">Aucun.</p>'}
     <h3>Prestations à valider (${svcs.length})</h3>
@@ -1224,7 +1243,7 @@ const defilements = {};
 addEventListener('popstate', () => { retourArriere = true; });
 let pagePrecedente = null;
 // pages « racine » : les onglets du bas et les entrées du menu ; les autres sont des sous-pages (barre du haut avec retour et titre)
-const RACINES = ['#/', '#/recherche', '#/services', '#/proprietaires', '#/retour', '#/compte', '#/compte/favoris', '#/compte/messages', '#/connexion', '#/inscription'];
+const RACINES = ['#/', '#/recherche', '#/location', '#/services', '#/proprietaires', '#/retour', '#/compte', '#/compte/favoris', '#/compte/messages', '#/connexion', '#/inscription'];
 const estRacine = h => RACINES.includes(h);
 const parentDe = h => h.startsWith('#/logement') || h.startsWith('#/comparer') ? '#/recherche' : h.startsWith('#/prestation') ? '#/services'
   : h.startsWith('#/conversation') ? '#/compte/messages' : h.startsWith('#/compte') || h.startsWith('#/avis') ? '#/compte' : '#/';
@@ -1260,6 +1279,7 @@ async function rendre() {
     try {
       if (!a) await pageAccueil();
       else if (a === 'recherche') await pageRecherche();
+      else if (a === 'location' && LOC_ON) await pageLocation();
       else if (a === 'comparer') await pageComparer();
       else if (a === 'proprietaires') await pageProprietaires();
       else if (a === 'logement' && b) await (PRET ? pageLogement(b) : vue(fermePourLeMoment()));
@@ -1312,6 +1332,7 @@ async function rendre() {
     await chargerMoi().catch(() => {});
     if (new URLSearchParams(location.search).has('nouveau-mdp') && moi) return pageNouveauMdp();
   }
+  if (PRET) await Promise.race([locInstallee(), new Promise(r => setTimeout(r, 1500))]);   // la location reste cachée tant que location.sql n'est pas installé
   rendre();
 })();
 

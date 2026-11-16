@@ -1,7 +1,7 @@
 /* Kaz An Nou — séjours et services pour la maison : service worker : l'appli s'installe sur l'écran d'accueil. Toujours la version en ligne d'abord, la copie locale seulement hors connexion.
    Seuls les fichiers du site sont gardés : jamais les données (Supabase), ni les cartes. CACHE à monter à chaque publication. */
-const CACHE = 'kaz-v4';
-const COQUILLE = ['./', 'kaz.css', 'kaz.js', 'recherche.js', 'agence.js', 'lieux.js', 'mesure.js', 'config.js', 'lib/supabase.js', 'territoires.js', 'img/logo.svg'];
+const CACHE = 'kaz-v5';
+const COQUILLE = ['./', 'kaz.css', 'kaz.js', 'louer.js', 'recherche.js', 'agence.js', 'lieux.js', 'mesure.js', 'config.js', 'lib/supabase.js', 'territoires.js', 'img/logo.svg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(COQUILLE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(l => Promise.all(l.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {

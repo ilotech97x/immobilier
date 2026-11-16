@@ -44,7 +44,7 @@ async function donneesRecherche(r) {
   const avecPoint = await agenceInstallee();
   const cols = 'id, owner, titre, type, territoire, commune, quartier, chambres, lits, sdb, voyageurs, prix_nuit, menage, min_nuits, equipements, photos, created_at, updated_at' + (avecPoint ? ', lat, lng' : '');
   const [liste, notes, libres] = await Promise.all([
-    memoK('publies', () => q(sb.from('logements').select(cols).eq('statut', 'publie').order('created_at', { ascending: false }).limit(300)), 60000),
+    memoK('publies', () => q((LOC_ON ? sb.from('logements').select(cols).eq('statut', 'publie').neq('formule', 'location') : sb.from('logements').select(cols).eq('statut', 'publie')).order('created_at', { ascending: false }).limit(300)), 60000),   // une location seule n'a pas de prix à la nuit
     memoK('notes', () => q(sb.from('notes').select('cible, moyenne, nombre').limit(5000)).then(n => Object.fromEntries(n.map(x => [x.cible, x]))), 60000),
     r.arrivee && r.depart && r.depart > r.arrivee ? memoK(`libres-${r.arrivee}-${r.depart}`, () => q(sb.rpc('logements_libres', { d1: r.arrivee, d2: r.depart })).then(l => new Set(l)), 60000) : null]);
   return { liste: liste.map(l => ({ ...l, pos: positionDe(l) })), notes, libres };
