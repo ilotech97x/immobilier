@@ -152,7 +152,8 @@ const param = () => Object.fromEntries(new URLSearchParams((location.hash.split(
 const aller = h => { if (location.hash === h) rendre(); else location.hash = h; };
 const s_ = n => n > 1 ? 's' : '';
 // « à » + commune, avec l'article contracté : au Diamant, aux Trois-Îlets, à la Trinité, à l’Ajoupa-Bouillon, à Fort-de-France
-const aLieu = c => { const t = String(c || '').trim(); return /^le /i.test(t) ? 'au ' + t.slice(3) : /^les /i.test(t) ? 'aux ' + t.slice(4) : /^la /i.test(t) ? 'à la ' + t.slice(3) : /^l[’']/i.test(t) ? 'à l’' + t.slice(2) : 'à ' + t; };
+// commune pas encore donnée (« À préciser », « Communiquée à la réservation ») : on dit simplement « en Martinique »
+const aLieu = c => { const t = String(c || '').trim(); if (!t || /^(à préciser|communiqu)/i.test(t)) return 'en Martinique'; return /^le /i.test(t) ? 'au ' + t.slice(3) : /^les /i.test(t) ? 'aux ' + t.slice(4) : /^la /i.test(t) ? 'à la ' + t.slice(3) : /^l[’']/i.test(t) ? 'à l’' + t.slice(2) : 'à ' + t; };
 const noteFr = n => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const qsDates = p => { const u = new URLSearchParams(); ['arrivee', 'depart', 'voyageurs'].forEach(k => p[k] && u.set(k, p[k])); const s = u.toString(); return s ? '?' + s : ''; };
 // bouton cœur (favoris) : sans compte, il mène à la connexion puis revient ici
