@@ -234,14 +234,19 @@ async function compter() {
 }
 
 // ---------------------------------------------------------------- mise en page
+let ficheLocation = false;   // la fiche ouverte est une location seule : l'onglet « Location » est actif
+// logements vus récemment : gardés sur l'appareil seulement (12 au plus)
+const vusListe = () => { try { const l = JSON.parse(localStorage.getItem('kazVus') || '[]'); return Array.isArray(l) ? l.filter(x => /^[0-9a-f-]{36}$/.test(x)).slice(0, 12) : []; } catch (e) { return []; } };
+const vusAjouter = id => { try { localStorage.setItem('kazVus', JSON.stringify([id, ...vusListe().filter(x => x !== id)].slice(0, 12))); } catch (e) { /* stockage indisponible */ } };
+const vusEffacer = () => { try { localStorage.removeItem('kazVus'); } catch (e) { /* stockage indisponible */ } };
 function nav() {
   const h = location.hash || '#/';
   const b = n => n ? `<span class="badge">${n}</span>` : '';
   const on = (...p) => p.some(x => h.startsWith(x));
   const cls = (...p) => on(...p) ? 'class="on" aria-current="page"' : '';
   $('#nav').innerHTML = `
-    <a href="#/recherche" ${cls('#/recherche', '#/logement', '#/comparer')}>Séjours</a>
-    ${LOC_ON ? `<a href="#/location" ${cls('#/location')}>Location</a>` : ''}
+    <a href="#/recherche" ${cls('#/recherche', '#/comparer', ...(ficheLocation ? [] : ['#/logement']))}>Séjours</a>
+    ${LOC_ON ? `<a href="#/location" ${cls('#/location', ...(ficheLocation ? ['#/logement'] : []))}>Location</a>` : ''}
     <a href="#/services" ${cls('#/services', '#/prestation')}>Services maison</a>
     <a href="#/proprietaires" ${cls('#/proprietaires')}>Propriétaires</a>
     <a href="#/retour" ${cls('#/retour')}>Retour au pays</a>
@@ -469,7 +474,26 @@ function signalerLogement(l) {
   });
 }
 
+// rubrique « Antilles » de la fiche : seulement ce que l'hôte a coché ; le reste est à demander (rien n'est supposé)
+function blocAntilles(l) {
+  const eq = l.equipements || [], oui = (k, t) => eq.includes(k) ? `<div class="ant ok"><span aria-hidden="true">✅</span><span>${t}</span></div>` : '';
+  const ask = (k, t) => eq.includes(k) ? '' : `<div class="ant"><span aria-hidden="true">❔</span><span>${t}</span></div>`;
+  return `<section id="antilles" class="bloc"><h2>Vivre ici, aux Antilles</h2>
+    <div class="savoir antilles">${oui('citerne', '<b>Citerne d’eau</b> sur place.')}${oui('groupe', '<b>Groupe électrogène</b> sur place.')}${oui('clim', '<b>Climatisation</b>.')}${oui('starlink', '<b>Internet Starlink</b>.')}${oui('serrure', '<b>Arrivée autonome</b> (serrure à code ou boîte à clés).')}
+      ${ask('citerne', 'Citerne d’eau : non indiquée. Demandez à l’hôte si l’eau est parfois coupée.')}${ask('groupe', 'Groupe électrogène : non indiqué. Demandez ce qui se passe en cas de coupure de courant.')}
+      <div class="ant"><span aria-hidden="true">❔</span><span>Moustiquaires : non renseignées dans l’annonce. Demandez à l’hôte.</span></div></div>
+    <p class="petit muted">Saison cyclonique : de juin à novembre. Avant de réserver, demandez à l’hôte comment le logement est protégé et ce qui est prévu si le séjour est perturbé. Des prestataires de <a href="#/services">mise en sécurité et de mode cyclone</a> existent sur Kaz An Nou.</p></section>`;
+}
+// points forts : seulement ce qui est vrai pour ce logement
+function pointsForts(l) {
+  const p = [];
+  [['vue_mer', '🌊 Vue mer'], ['plage', '🏖️ Plage à pied'], ['piscine', '🏊 Piscine'], ['citerne', '💧 Citerne d’eau'], ['groupe', '⚡ Groupe électrogène'], ['starlink', '🛰️ Internet Starlink'], ['serrure', '🔐 Arrivée autonome'], ['clim', '❄️ Climatisation']]
+    .forEach(([k, t]) => { if ((l.equipements || []).includes(k)) p.push(t); });
+  if (l.voyageurs >= 6 && l.formule !== 'location') p.push(`👨‍👩‍👧‍👦 Pour ${l.voyageurs} voyageurs`);
+  return p.slice(0, 5).length ? `<p class="forts" aria-label="Points forts">${p.slice(0, 5).map(x => `<span class="tag">${x}</span>`).join('')}</p>` : '';
+}
 async function pageLogement(id) {
+  ficheLocation = false;
   document.body.classList.add('page-fiche');
   vue(`<div class="wrap fiche-tete" aria-busy="true" aria-label="Chargement de l’annonce"><i class="sq sq-t"></i><i class="sq" style="height:clamp(260px,40vw,428px);margin:16px 0;border-radius:24px"></i><i class="sq sq-l"></i><i class="sq sq-l" style="width:60%"></i></div>`);
   try {
@@ -484,6 +508,7 @@ async function pageLogement(id) {
     const sej = locSejour(l), locOK = locEstLocation(l);   // location seule : pas de réservation à la nuit
     const prenomH = esc(hote?.prenom || 'le propriétaire'), long = (l.description || '').length > 650;
     document.title = `${l.titre} — ${l.commune} | Kaz An Nou`;
+    ficheLocation = locSeule(l); nav(); vusAjouter(l.id);
     const faits = [['maison', esc(TYPES[l.type] || 'Logement')], ['voyageurs', `${l.voyageurs} voyageur${s_(l.voyageurs)}`], ['lit', `${l.chambres ? `${l.chambres} chambre${s_(l.chambres)}` : 'Pièce unique'} · ${l.lits} lit${s_(l.lits)}`],
       ['bain', `${l.sdb} salle${s_(l.sdb)} d’eau`], ['lune', `${l.min_nuits} nuit${s_(l.min_nuits)} minimum`]];
     if (!sej) { faits.length = 0; faits.push(['maison', esc(TYPES[l.type] || 'Logement')], ['lit', `${l.chambres ? `${l.chambres} chambre${s_(l.chambres)}` : 'Pièce unique'} · ${l.lits} lit${s_(l.lits)}`], ['bain', `${l.sdb} salle${s_(l.sdb)} d’eau`]); }
@@ -500,11 +525,11 @@ async function pageLogement(id) {
           <button type="button" class="btn btn-s btn-l ${favoris.has(l.id) ? 'on' : ''}" data-fav="${l.id}" aria-pressed="${favoris.has(l.id)}">${ico('coeur')} <span>${favoris.has(l.id) ? 'Enregistré' : 'Enregistrer'}</span></button>
           <button type="button" class="btn btn-s btn-l" data-comparer="${l.id}" aria-pressed="${compares().includes(l.id)}">${ico('comparer')} Comparer</button></div></div>
       ${galerie(l, ph)}</div>
-    <div class="wrap"><nav class="ancres" aria-label="Sections de l’annonce">${[['apercu', 'Aperçu'], ...(locOK ? [['location', 'Location']] : []), ['equipements', 'Équipements'], ['savoir', 'Bon à savoir'], ['emplacement', 'Emplacement'], ...(sej ? [['disponibilites', 'Disponibilités']] : []), ['avis', 'Avis']]
+    <div class="wrap"><nav class="ancres" aria-label="Sections de l’annonce">${[['apercu', 'Aperçu'], ...(locOK ? [['location', 'Location']] : []), ['equipements', 'Équipements'], ['antilles', 'Antilles'], ['savoir', 'Bon à savoir'], ['emplacement', 'Emplacement'], ...(sej ? [['disponibilites', 'Disponibilités']] : []), ['avis', 'Avis']]
       .map(([k, t]) => `<button type="button" data-ancre="${k}">${t}</button>`).join('')}</nav>
     <div class="fiche"><div>
       <section id="apercu"><h2>${esc(TYPES[l.type] || 'Logement')} ${esc(aLieu(l.commune))}</h2>
-        <div class="faits">${faits.map(([i, t]) => `<div>${ico(i)}<span>${t}</span></div>`).join('')}</div>
+        <div class="faits">${faits.map(([i, t]) => `<div>${ico(i)}<span>${t}</span></div>`).join('')}</div>${pointsForts(l)}
         <div class="bloc hote"><div class="avatar">${hote?.avatar ? `<img src="${esc(photo(hote.avatar))}" alt="">` : initiale(hote)}</div>
           <div><b>Proposé par ${prenomH}</b> ${hote?.valide ? '<span class="tag ok">✓ Vérifié par Kaz An Nou</span>' : ''}<div class="muted petit">Membre depuis ${hote ? new Date(hote.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : '—'}</div></div></div>
         <div class="bloc"><div class="texte-long ${long ? 'replie' : ''}" id="desc">${esc(l.description) || '<span class="muted">Pas encore de description.</span>'}</div>
@@ -514,6 +539,7 @@ async function pageLogement(id) {
         ${l.visite3d ? `<p><a class="btn btn-v" href="${esc(l.visite3d)}" target="_blank" rel="noopener">🧊 Visite virtuelle 3D</a></p>` : ''}</section>
       ${locOK ? locBloc(l) : ''}
       <section id="equipements" class="bloc"><h2>Équipements</h2><div class="equip">${eqs.map(e => `<span><span aria-hidden="true">${e[1]}</span> ${esc(e[2])}</span>`).join('') || '<span class="muted">Non renseignés</span>'}</div></section>
+      ${blocAntilles(l)}
       <section id="savoir" class="bloc"><h2>Bon à savoir</h2><div class="savoir">${savoir.map(([i, t]) => `<div><span aria-hidden="true">${i}</span><span>${t}</span></div>`).join('')}</div>
         ${l.regles ? `<h3 style="margin-top:16px">Règles de la maison</h3><p class="texte-long">${esc(l.regles)}</p>` : ''}</section>
       ${blocEmplacement(l)}
