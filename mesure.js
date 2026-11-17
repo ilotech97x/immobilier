@@ -5,12 +5,13 @@
   'use strict';
   const cfg = window.KAZ_CONFIG || {}, app = document.documentElement.dataset.app;
   if (!cfg.url || !cfg.cle || !app || navigator.doNotTrack === '1' || navigator.globalPrivacyControl) return;
-  const envoyer = (type, page, cible) => {
+  const repos = window.requestIdleCallback ? f => requestIdleCallback(f, { timeout: 4000 }) : f => setTimeout(f, 1500);   // après l'affichage (performance, 17/11)
+  const envoyer = (type, page, cible) => repos(() => {
     try {
       fetch(cfg.url + '/rest/v1/rpc/mesurer', { method: 'POST', keepalive: true, headers: { apikey: cfg.cle, Authorization: 'Bearer ' + cfg.cle, 'Content-Type': 'application/json' },
         body: JSON.stringify({ app_c: app, type_c: type, page_c: page, cible_c: cible || '', appareil_c: innerWidth < 800 ? 'mobile' : 'ordinateur' }) }).catch(() => {});
     } catch (e) { /* jamais bloquant */ }
-  };
+  });
   const page = () => (location.pathname.replace(/index\.html$/, '') + (location.hash.split('?')[0] || '')).slice(0, 80);
   let derniere = '';
   const vue = () => { const p = page(); if (p !== derniere) { derniere = p; envoyer('vue', p); } };

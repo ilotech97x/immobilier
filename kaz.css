@@ -486,7 +486,7 @@ table.t th{background:var(--sable);font-size:13px;letter-spacing:.3px}
 @media (max-width:900px){
   body{padding-bottom:72px}
   .nav{display:none}
-  .bas{display:grid}
+  .bas{display:grid;min-height:calc(56px + env(safe-area-inset-bottom))}
   .vue-carte .rech-carte{bottom:calc(64px + env(safe-area-inset-bottom))}
   .bascule{bottom:calc(80px + env(safe-area-inset-bottom))}
   .vue-carte .apercu{bottom:16px}
@@ -634,3 +634,7 @@ html[data-sens=onglet]::view-transition-new(root){animation:vt-montre .18s ease 
   .feuille-filtres .feuille-pied .lien{white-space:nowrap}
   .feuille-filtres .feuille-pied .btn{white-space:nowrap;padding:10px 14px;font-size:15px}
 }
+
+/* performance (17/11) : place réservée avant que kaz.js n'écrive la page (le pied de page ne saute plus) */
+#app{min-height:calc(100svh - 60px)}
+.wrap>.section{content-visibility:auto;contain-intrinsic-size:auto 420px}
