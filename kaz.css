@@ -638,3 +638,61 @@ html[data-sens=onglet]::view-transition-new(root){animation:vt-montre .18s ease 
 /* performance (17/11) : place réservée avant que kaz.js n'écrive la page (le pied de page ne saute plus) */
 #app{min-height:calc(100svh - 60px)}
 .wrap>.section{content-visibility:auto;contain-intrinsic-size:auto 420px}
+
+/* ---------------------------------------------------------------- recherche intelligente (17/11) : une phrase, suggestions, filtres avec leur nombre de résultats */
+.intel{position:relative;display:flex;gap:8px;align-items:center;min-width:0}
+.intel-champ{flex:1;min-width:0;display:flex;align-items:center;gap:8px;border:1px solid var(--ligne2);background:var(--surface);border-radius:99px;padding:0 8px 0 14px;min-height:46px}
+.intel-champ:focus-within{border-color:var(--vert2);box-shadow:0 0 0 2px rgba(27,107,74,.18)}
+.intel-champ>svg.i{flex:none;width:20px;height:20px;color:var(--vert2)}
+.intel input{flex:1;min-width:0;border:0;outline:0;background:none;font-size:16px;padding:10px 0;color:var(--texte)}
+.intel input::placeholder{color:var(--doux);opacity:1;text-overflow:ellipsis}
+.intel input::-webkit-search-cancel-button{display:none}
+.intel-eff{flex:none;width:34px;height:34px;display:grid;place-items:center;border:0;border-radius:50%;background:var(--sable);color:var(--encre);cursor:pointer}
+.intel-eff[hidden]{display:none}
+.intel-eff svg.i{width:16px;height:16px}
+.intel-ok{flex:none;min-height:46px;border-radius:99px;padding:0 22px}
+.intel-liste{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:70;list-style:none;margin:0;padding:6px;background:#fff;border:1px solid var(--ligne2);border-radius:var(--rc);box-shadow:var(--ombre2);max-height:min(60vh,420px);overflow:auto;color:var(--texte)}
+.intel-liste[hidden]{display:none}
+.intel-liste li[role=option]{display:flex;align-items:center;gap:10px;padding:8px 12px;min-height:44px;border-radius:8px;cursor:pointer}
+.intel-liste li[role=option]:hover,.intel-liste li[aria-selected=true]{background:var(--vert-clair)}
+.intel-liste .s-ic{flex:none;width:24px;text-align:center}
+.intel-liste .s-t{font-weight:700;color:var(--encre);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.intel-liste small{margin-left:auto;color:var(--doux);font-size:13px;white-space:nowrap;padding-left:8px}
+.intel-t{padding:6px 12px 2px;font-size:12px;font-weight:800;letter-spacing:.3px;color:var(--doux);text-transform:uppercase}
+.intel-accueil{max-width:980px;margin-bottom:12px}
+.intel-accueil .intel-champ{background:#fff;min-height:56px;box-shadow:var(--ombre2)}
+.intel-accueil .intel-ok{min-height:56px}
+.hero .ou-choisir{margin:0 0 10px;font-size:14px;opacity:.85}
+.compris-t{font-weight:800;font-size:14px;color:var(--vert2);padding:0 2px}
+.compris-non{margin:-6px 0 12px;font-size:14px;color:var(--doux)}
+.cnt{font-style:normal;font-size:12px;font-weight:700;opacity:.7;margin-left:2px}
+.puce:disabled,.puce.vide,.choix label.vide{opacity:.42}
+.puce:disabled,.choix input:disabled,.choix input:disabled+span{cursor:not-allowed}
+.mode-loc .rech-form{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.mode-loc .rech-form label:nth-child(n+3){display:none}
+@media (max-width:1023px){
+  .rech-barre .wrap{gap:6px}
+  .intel-champ{min-height:42px}
+  .intel-ok{min-height:42px;padding:0 16px}
+  .intel input{padding:8px 0}
+}
+@media (max-width:380px){.intel-ok{display:none}}
+/* comparateur : différences seulement, partage */
+.comp-outils{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px}
+.comp-outils label{display:inline-flex;align-items:center;gap:8px;min-height:40px;font-weight:600;cursor:pointer}
+.diff-seule table.comp tr.meme{display:none}
+table.comp .loc-total{font-weight:800;color:var(--encre)}
+/* fiche : prix du séjour */
+.calcul .moy,.calcul .ex{font-size:14px;color:var(--doux)}
+.calcul .ex{display:block}
+.prix-sejour{margin:0 0 10px;padding:10px 12px;border-radius:var(--rc);background:var(--vert-clair);font-size:14px;color:var(--encre)}
+.dispo-info{margin:0 0 10px;font-size:15px}
+/* favoris rangés en listes */
+.listes-barre{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
+.liste-ranger{position:relative;z-index:2;display:inline-flex;gap:5px;align-items:center;font-size:14px;min-height:36px;text-decoration:none}
+.liste-choix{display:grid;gap:6px;margin:10px 0}
+.liste-choix label{display:flex;gap:10px;align-items:center;min-height:44px;padding:0 6px;font-weight:600}
+/* coquille : titre de l'accueil dessiné par le HTML avant le JavaScript (amorce.js dit si on est sur l'accueil) */
+.coquille{display:none}
+.p-accueil .coquille{display:block}
+.sans-loc .onglet-loc{display:none}

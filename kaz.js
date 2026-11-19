@@ -274,10 +274,10 @@ const exigeCompte = () => { if (moi) return true; aller('#/connexion?retour=' + 
 const erreurEtat = e => `<div class="vide-etat erreur-etat" role="alert"><div class="ico">📡</div><h3>Le chargement n’a pas abouti</h3><p class="muted">${esc(erreur(e))}</p><button class="btn btn-p" data-reessayer>Réessayer</button></div>`;
 
 // carte d'un logement dans une grille (accueil, favoris) : toute la carte mène à la fiche, le cœur et « Comparer » restent des boutons
-function carteLogement(l, notes, avecComparer = false, ctx = '') {
+function carteLogement(l, notes, avecComparer = false, ctx = '', prio = false) {
   const n = notes?.[l.id], lc = locCartePrix(l, ctx);
   return `<article class="carte">
-    <div class="ph">${l.photos?.[0] ? `<img src="${esc(photo(l.photos[0]))}" alt="" loading="lazy">` : '<span class="vide" aria-hidden="true">🏝️</span>'}</div>
+    <div class="ph">${l.photos?.[0] ? `<img src="${esc(photo(l.photos[0]))}" alt="" width="400" height="300" decoding="async" ${prio ? 'fetchpriority="high"' : 'loading="lazy"'}>` : '<span class="vide" aria-hidden="true">🏝️</span>'}</div>
     ${coeurBtn(l.id)}
     <div class="corps"><div class="l1"><span>${lieu(l)}</span>${n ? `<span class="etoile">★ ${noteFr(n.moyenne)} (${n.nombre})</span>` : '<span class="tag">Nouveau</span>'}</div>
       <h3 class="carte-t"><a href="#/logement/${l.id}">${esc(l.titre)}</a></h3>
@@ -350,6 +350,7 @@ async function pageAccueil() {
       ${ONGLETS('#/')}
       <h1>Votre kaz en Martinique, <em>réservée en confiance</em>.</h1>
       <p>Villas, gîtes et appartements de propriétaires vérifiés, posés sur une carte avec leurs vrais prix et leurs vrais avis. La Martinique d’abord, puis les Antilles et partout où vivent les nôtres.</p>
+      ${KazIntel.formulaire('accueil')}<p class="ou-choisir">Ou choisissez un lieu et des dates :</p>
       ${barreRecherche()}
       <div class="apres"><a href="#/recherche">${ico('carte')} Explorer la carte des logements</a><a href="#/proprietaires">Propriétaire ? Estimez vos revenus</a></div>
     </div></section>
@@ -374,14 +375,20 @@ async function pageAccueil() {
       <section class="section"><div class="appel" style="background:linear-gradient(135deg,#1e3a5f,#4f46e5)"><div><h2>Visite virtuelle 3D, photos, drone</h2><p>Faites visiter votre bien depuis un téléphone, avant même le premier déplacement. Par IloTech.</p></div>
         <a class="btn btn-p" href="offres.html#visite-3d">Essayer la visite 3D</a></div></section>
     </div>`);
-  brancherRecherche();
+  brancherRecherche(); KazIntel.brancher('accueil');
   if (LOC_ON && $('#outils')) $('#outils').insertAdjacentHTML('afterbegin', `<a class="outil" href="#/location"><span class="ico" aria-hidden="true">🔑</span><span><b>Location</b><span>Meublée ou vide, au mois ou à l’année. Annonces gratuites, sans frais d’agence.</span></span></a>`);
   agenceInstallee().then(ok => { if (ok && $('#outils')) $('#outils').insertAdjacentHTML('beforeend', `<a class="outil" href="#/compte/alertes"><span class="ico" aria-hidden="true">🔔</span><span><b>Alertes</b><span>Prévenu dans votre espace dès qu’un logement correspond à vos critères.</span></span></a>`); });
   if (!PRET) { $('#liste').outerHTML = videLogements(); return; }
+  // les dernières annonces vues sur cet appareil s'affichent tout de suite ; la base les remplace seulement si elles ont changé
+  const copie = KazIntel.copieLire('accueil');
+  if (copie?.liste?.length && $('#liste')) { const el = $('#liste'); el.removeAttribute('aria-busy'); el.className = 'grille'; el.innerHTML = copie.liste.map((x, i) => carteLogement(x, copie.notes, false, '', i < 2)).join(''); }
   try {
     const l = await q(LOC_ON ? sb.from('logements').select('*').eq('statut', 'publie').neq('formule', 'location').order('created_at', { ascending: false }).limit(8) : sb.from('logements').select('*').eq('statut', 'publie').order('created_at', { ascending: false }).limit(8)), n = await notesDe(l.map(x => x.id));
     const el = $('#liste'); if (!el) return;
-    el.removeAttribute('aria-busy'); el.className = l.length ? 'grille' : ''; el.innerHTML = l.length ? l.map(x => carteLogement(x, n)).join('') : videLogements();
+    KazIntel.copieEcrire('accueil', { liste: l.map(KazIntel.allegee), notes: n });
+    const signe = (ls, nn) => JSON.stringify([ls.map(x => [x.id, x.updated_at]), nn]);
+    if (copie?.liste?.length && signe(copie.liste, copie.notes) === signe(l, n)) return;   // identique : rien à redessiner
+    el.removeAttribute('aria-busy'); el.className = l.length ? 'grille' : ''; el.innerHTML = l.length ? l.map((x, i) => carteLogement(x, n, false, '', i < 2)).join('') : videLogements();
   } catch (e) { if ($('#liste')) { $('#liste').className = ''; $('#liste').innerHTML = erreurEtat(e); } }
 }
 const videLogements = () => `<div class="vide-etat"><div class="ico">🏝️</div><h3>Les premiers logements arrivent</h3>
@@ -406,11 +413,21 @@ function calendrier(prises, debut, fin, decal = 0) {
     <span class="muted petit">Les dates barrées sont déjà réservées.</span>
     <button type="button" class="rond" data-cal="1" aria-label="Mois suivants" ${decal >= 10 ? 'disabled' : ''}>${ico('droite')}</button></div><div class="cal">${mois(decal)}${mois(decal + 1)}</div>`;
 }
+// phrase sous « Disponibilités » : tirée des dates déjà prises (aucune date inventée)
+function infoDispo(prises, minNuits) {
+  const t = auj(), l = prises.filter(p => p.fin > t).sort((a, b) => String(a.debut).localeCompare(String(b.debut)));
+  let fin = t; const lib = [];   // périodes libres assez longues pour le séjour minimum ; la dernière n'a pas de fin
+  for (const p of l) { if (p.debut > fin && nuits(fin, p.debut) >= minNuits) lib.push([fin, p.debut]); if (p.fin > fin) fin = p.fin; }
+  lib.push([fin, null]);
+  const [a, b] = lib[0], maint = a === t;
+  if (!b) return maint ? '<b>Libre dès maintenant</b> : aucune date n’est réservée pour l’instant.' : `<b>Libre à partir du ${jour(a)}</b> : les dates avant sont réservées.`;
+  return maint ? `<b>Libre dès maintenant</b> jusqu’au ${jour(b)} (${nuits(a, b)} nuits), puis des dates réservées.` : `<b>Prochaine période libre :</b> du ${jour(a)} au ${jour(b)} (${nuits(a, b)} nuits).`;
+}
 // photos : mosaïque sur ordinateur, défilement au doigt avec compteur sur téléphone ; chaque photo s'agrandit
 function galerie(l, ph) {
   const n = Math.max(1, Math.min(ph.length, 5));
   return `<div class="galerie-z"><div class="galerie g${n}" id="galerie">${(ph.length ? ph : [null]).map((p, i) => p
-      ? `<button type="button" class="ph-b" data-zoom="${i}" aria-label="Agrandir la photo ${i + 1} sur ${ph.length}"><img src="${esc(photo(p))}" alt="" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}></button>`
+      ? `<button type="button" class="ph-b" data-zoom="${i}" aria-label="Agrandir la photo ${i + 1} sur ${ph.length}"><img src="${esc(photo(p))}" alt="" width="800" height="600" decoding="async" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}></button>`
       : '<div><span class="vide" aria-hidden="true">🏝️</span></div>').join('')}</div>
     ${ph.length > 1 ? `<span class="compteur" id="compteurPh" aria-hidden="true">1 / ${ph.length}</span>` : ''}
     ${ph.length > 5 ? `<button type="button" class="btn btn-s tout-voir" data-zoom="0">Voir les ${ph.length} photos</button>` : ''}</div>`;
@@ -543,7 +560,7 @@ async function pageLogement(id) {
       <section id="savoir" class="bloc"><h2>Bon à savoir</h2><div class="savoir">${savoir.map(([i, t]) => `<div><span aria-hidden="true">${i}</span><span>${t}</span></div>`).join('')}</div>
         ${l.regles ? `<h3 style="margin-top:16px">Règles de la maison</h3><p class="texte-long">${esc(l.regles)}</p>` : ''}</section>
       ${blocEmplacement(l)}
-      ${sej ? `<section id="disponibilites" class="bloc"><h2>Disponibilités</h2><div id="cal">${calendrier(prises, p.arrivee, p.depart)}</div></section>` : ''}
+      ${sej ? `<section id="disponibilites" class="bloc"><h2>Disponibilités</h2><p class="dispo-info">${infoDispo(prises, l.min_nuits)}</p><div id="cal">${calendrier(prises, p.arrivee, p.depart)}</div></section>` : ''}
       <section id="avis" class="bloc"><h2>${avis.length && note ? `★ ${noteFr(note.moyenne)} · ${avis.length} avis` : 'Avis'}</h2>
         <p class="muted petit">Avis vérifiés : seuls les voyageurs qui ont séjourné ici peuvent en laisser un, une fois le séjour terminé.</p>
         ${avis.length ? avis.map(a => `<div class="avis1"><b aria-label="${a.note} sur 5">${'★'.repeat(a.note)}${'☆'.repeat(5 - a.note)}</b><span>${esc(a.texte)}</span><small class="muted">${jourLong(a.created_at.slice(0, 10))}</small></div>`).join('')
@@ -572,10 +589,13 @@ async function pageLogement(id) {
       const d = Object.fromEntries(new FormData(f));
       if (d.debut) f.fin.min = plus(d.debut, l.min_nuits);
       const nn = d.debut && d.fin ? nuits(d.debut, d.fin) : 0, total = l.prix_nuit * nn + Number(l.menage);
+      const ex = Math.max(l.min_nuits, 3), exTotal = l.prix_nuit * ex + Number(l.menage || 0);
       $('#calcul').innerHTML = nn > 0 ? `<div><span>${eur(l.prix_nuit)} × ${nn} nuit${s_(nn)}</span><span>${eur(l.prix_nuit * nn)}</span></div>
-        ${l.menage > 0 ? `<div><span>Ménage</span><span>${eur(l.menage)}</span></div>` : ''}<div class="tot"><span>Total</span><span>${eur(total)}</span></div>
+        ${l.menage > 0 ? `<div><span>Ménage (une seule fois)</span><span>${eur(l.menage)}</span></div>` : '<div><span>Ménage</span><span>Compris</span></div>'}<div class="tot"><span>Total du séjour</span><span>${eur(total)}</span></div>
+        <div class="moy"><span>Soit en moyenne par nuit, ménage compris</span><span>${eur(total / nn)}</span></div>
         <div class="muted petit">Taxe de séjour de la commune en plus, le cas échéant.</div>
-        ${nn < l.min_nuits ? `<div style="color:var(--ko)">Séjour minimum : ${l.min_nuits} nuits</div>` : ''}` : '<p class="muted petit" style="margin:0">Choisissez vos dates pour voir le total.</p>';
+        ${nn < l.min_nuits ? `<div style="color:var(--ko)">Séjour minimum : ${l.min_nuits} nuits</div>` : ''}` : `<p class="prix-sejour" style="margin:0">Exemple pour ${ex} nuit${s_(ex)} : <b>${eur(exTotal)}</b>${l.menage > 0 ? `, dont ${eur(l.menage)} de ménage` : ', ménage compris'}.
+        <span class="muted">Choisissez vos dates pour le total exact (taxe de séjour en plus, le cas échéant).</span></p>`;
       $('#cal').innerHTML = calendrier(prises, d.debut, d.fin, decal);
       $('#barreDates').textContent = nn > 0 ? `${jour(d.debut)} → ${jour(d.fin)} · ${eur(total)}` : 'Ajoutez vos dates';
     };
@@ -894,10 +914,14 @@ async function ongletFavoris(c) {
   const ids = [...favoris];
   const l = ids.length ? await q(sb.from('logements').select('*').in('id', ids)) : [];
   const n = await notesDe(l.map(x => x.id));
+  const li = l.length ? await KazListes.ongletFavoris(c, l, () => ongletFavoris(c)).catch(() => null) : null;   // listes nommées : seulement si la base les a (kaz_listes.sql)
+  const vis = li ? li.visibles : l;
   c.innerHTML = `<div class="titre-s"><h1>Favoris</h1>${l.length ? `<div class="actions"><a class="btn btn-s" href="#/recherche?favoris=1">${ico('carte')} Voir sur la carte</a><a class="btn btn-s" href="#/comparer">${ico('comparer')} Comparateur</a></div>` : ''}</div>
-    ${l.length ? `<p class="muted">Touchez « Comparer » sur 2 à 4 logements pour les mettre côte à côte.</p><div class="grille">${l.map(x => carteLogement(x, n, true)).join('')}</div>`
+    ${li ? li.html : ''}
+    ${vis.length ? `<p class="muted">Touchez « Comparer » sur 2 à 4 logements pour les mettre côte à côte.</p><div class="grille">${vis.map(x => carteLogement(x, n, true)).join('')}</div>`
+      : l.length ? `<div class="vide-etat"><div class="ico">♡</div><h3>Cette liste est vide</h3><p class="muted">Touchez « Ranger dans une liste » sur un logement de « Tous » pour l’ajouter ici.</p></div>`
       : `<div class="vide-etat"><div class="ico">♡</div><h3>Pas encore de favoris</h3><p class="muted">Touchez le cœur d’un logement pour le garder ici, et retrouvez-le sur tous vos appareils.</p><a class="btn btn-p" href="#/recherche">Chercher un logement</a></div>`}`;
-  barreComparer();
+  li?.apres(); barreComparer();
 }
 
 async function ongletProfil(c) {
@@ -1358,7 +1382,11 @@ async function rendre() {
     await chargerMoi().catch(() => {});
     if (new URLSearchParams(location.search).has('nouveau-mdp') && moi) return pageNouveauMdp();
   }
-  if (PRET) await Promise.race([locInstallee(), new Promise(r => setTimeout(r, 1500))]);   // la location reste cachée tant que location.sql n'est pas installé
+  if (PRET) {   // la location reste cachée tant que location.sql n'est pas installé
+    let connu = null; try { connu = localStorage.getItem('kazLoc'); } catch (e) { /* stockage indisponible */ }
+    if (connu === '1' || connu === '0') { LOC_ON = connu === '1'; locInstallee().then(on => { if (on !== (connu === '1')) { nav(); rendre(); } }); }   // réponse gardée d'une visite précédente : on ne l'attend pas
+    else await Promise.race([locInstallee(), new Promise(r => setTimeout(r, 1500))]);
+  }
   rendre();
 })();
 

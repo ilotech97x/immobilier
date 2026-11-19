@@ -5,7 +5,7 @@
    Fichiers versionnés (?v=) : cache d'abord (l'adresse change avec le contenu). Autres fichiers : cache puis mise à jour en arrière-plan.
    Jamais les données (Supabase), ni les cartes, ni les vidéos. CACHE à monter à chaque publication. */
 const PREFIXE = 'kaz-';
-const CACHE = PREFIXE + 'v7';
+const CACHE = PREFIXE + 'v8';
 const PORTEE = new URL('./', self.registration.scope).pathname;
 const MAX = 220;   // nombre maximal de fichiers gardés
 const API = /\/(rest|auth|storage|functions|realtime)\/v1\//;   // données : jamais gardées, même si l'API est sur la même adresse (tests locaux)

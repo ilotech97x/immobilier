@@ -3,7 +3,7 @@
    Prix, dépôt de garantie, statuts et droits sont décidés par la base ; ici on affiche et on prévient avant l'envoi.
    Tous les fichiers JS partagent la même portée : les noms de ce fichier commencent par loc / LOC / ST_LOC. */
 let LOC_ON = false, locP = null;
-const locInstallee = () => locP || (locP = PRET ? sb.from('logements').select('formule').limit(1).then(r => (LOC_ON = !r.error), () => false) : Promise.resolve(false));
+const locInstallee = () => locP || (locP = PRET ? sb.from('logements').select('formule').limit(1).then(r => { LOC_ON = !r.error; try { localStorage.setItem('kazLoc', LOC_ON ? '1' : '0'); } catch (e) { /* stockage indisponible */ } return LOC_ON; }, () => false) : Promise.resolve(false));
 const ST_LOC = { demande: ['att', 'En attente'], acceptee: ['ok', 'Acceptée'], refusee: ['ko', 'Refusée'], annulee: ['gris', 'Annulée'] };
 const LOC_FORMULES = { sejour: 'Séjours (à la nuit)', location: 'Location (au mois ou à l’année)', les_deux: 'Séjours et location' };
 const LOC_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];

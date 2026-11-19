@@ -24,14 +24,14 @@ function lireRecherche() {
     voyageurs: n(p.voyageurs, 1, 40), pmin: n(p.pmin, 1, 50000), pmax: n(p.pmax, 1, 50000), ch: n(p.ch, 1, 30), lits: n(p.lits, 1, 60), sdb: n(p.sdb, 1, 30),
     types: liste(p.types).filter(t => TYPES[t]), eq: liste(p.eq).filter(e => EQUIP.some(x => x[0] === e)),
     formule: p.formule === 'location' ? 'location' : '', surf: n(p.surf, 1, 2000), dpe: CLASSES_DPE.includes(p.dpe) ? p.dpe : '', meuble: p.meuble === 'oui' || p.meuble === 'non' ? p.meuble : '',
-    dispo: date(p.dispo), duree: n(p.duree, 1, 120), annul: liste(p.annul).filter(a => ANNULATION[a]),
+    dispo: date(p.dispo), mois: /^20\d{2}-(0[1-9]|1[0-2])$/.test(p.mois || '') ? p.mois : '', duree: n(p.duree, 1, 120), annul: liste(p.annul).filter(a => ANNULATION[a]),
     tri: TRIS[p.tri] ? p.tri : 'recent', zone: z.length === 4 && z.every(Number.isFinite) ? z : null,
     favoris: p.favoris === '1', alerte: /^[0-9a-f-]{36}$/.test(p.alerte || '') ? p.alerte : '', vue: p.vue === 'carte' ? 'carte' : 'liste',
   };
 }
 function adresseRecherche(r) {
   const p = new URLSearchParams();
-  ['territoire', 'commune', 'arrivee', 'depart', 'voyageurs', 'pmin', 'pmax', 'ch', 'lits', 'sdb', 'formule', 'surf', 'dpe', 'meuble', 'dispo', 'duree'].forEach(k => r[k] && p.set(k, r[k]));
+  ['territoire', 'commune', 'arrivee', 'depart', 'voyageurs', 'pmin', 'pmax', 'ch', 'lits', 'sdb', 'formule', 'surf', 'dpe', 'meuble', 'dispo', 'mois', 'duree'].forEach(k => r[k] && p.set(k, r[k]));
   if (r.types.length) p.set('types', r.types.join(','));
   if (r.eq.length) p.set('eq', r.eq.join(','));
   if (r.annul.length) p.set('annul', r.annul.join(','));
@@ -42,7 +42,7 @@ function adresseRecherche(r) {
   const s = p.toString(); return '#/recherche' + (s ? '?' + s : '');
 }
 // les filtres du panneau, remis à zéro (le lieu, les dates et la zone ont leurs propres boutons)
-const filtresVides = () => ({ formule: '', pmin: null, pmax: null, types: [], ch: null, lits: null, sdb: null, eq: [], surf: null, dpe: '', meuble: '', dispo: '', duree: null, annul: [], tri: 'recent' });
+const filtresVides = () => ({ formule: '', pmin: null, pmax: null, types: [], ch: null, lits: null, sdb: null, eq: [], surf: null, dpe: '', meuble: '', dispo: '', mois: '', duree: null, annul: [], tri: 'recent' });
 const enLocation = r => r.formule === 'location';
 // prix du logement pour la recherche : par nuit pour un séjour, par mois pour une location
 const prixDe = (l, r) => Number(enLocation(r) ? l.loyer_mois : l.prix_nuit);
@@ -53,11 +53,13 @@ function pastilles(r) {
   const nomEq = k => EQUIP.find(x => x[0] === k)?.[2] || k;
   if (enLocation(r)) plus('Location', x => Object.assign(x, { formule: '', pmin: null, pmax: null, meuble: '', dpe: '', dispo: '', duree: null }));
   if (r.arrivee && r.depart) plus(`${jour(r.arrivee)} → ${jour(r.depart)}`, x => { x.arrivee = ''; x.depart = ''; });
+  if (r.mois && !enLocation(r)) plus(`Libre en ${KazIntel.nomMois(r.mois)} (7 nuits d’affilée)`, x => { x.mois = ''; });
+  if (r.territoire && r.territoire !== 'partout' && typeof RCH !== 'undefined' && RCH?.compris?.terr === r.territoire) plus(r.territoire, x => { x.territoire = ''; });
   if (r.commune) plus(r.commune, x => { x.commune = ''; });
   if (r.pmin || r.pmax) plus(r.pmin && r.pmax ? `${eurCourt(r.pmin)} à ${eurCourt(r.pmax)} ${u}` : r.pmin ? `Dès ${eurCourt(r.pmin)} ${u}` : `Jusqu’à ${eurCourt(r.pmax)} ${u}`, x => { x.pmin = null; x.pmax = null; });
   if (r.voyageurs && !enLocation(r)) plus(`${r.voyageurs} voyageur${s_(r.voyageurs)}`, x => { x.voyageurs = null; });
   r.types.forEach(t => plus(TYPES[t], x => { x.types = x.types.filter(y => y !== t); }));
-  if (r.ch) plus(`${r.ch} chambre${s_(r.ch)} ou plus`, x => { x.ch = null; });
+  if (r.ch) plus(`${typeof RCH !== 'undefined' && RCH?.compris?.tn ? RCH.compris.tn + ' : ' : ''}${r.ch} chambre${s_(r.ch)} ou plus`, x => { x.ch = null; });
   if (r.lits) plus(`${r.lits} lit${s_(r.lits)} ou plus`, x => { x.lits = null; });
   if (r.sdb) plus(`${r.sdb} salle${s_(r.sdb)} d’eau ou plus`, x => { x.sdb = null; });
   r.eq.forEach(k => plus(nomEq(k), x => { x.eq = x.eq.filter(y => y !== k); }));
@@ -76,11 +78,13 @@ async function donneesRecherche(r) {
   const [avecPoint] = await Promise.all([agenceInstallee(), locInstallee()]);
   const cols = 'id, owner, titre, type, territoire, commune, quartier, chambres, lits, sdb, voyageurs, prix_nuit, menage, min_nuits, equipements, photos, created_at, updated_at' + (avecPoint ? ', lat, lng, annulation' : '')
     + (LOC_ON ? ', formule, loyer_mois, charges_mois, surface_m2, dpe, meuble, duree_min_mois, duree_max_mois, dispo_le' : '');
-  const [liste, notes, libres] = await Promise.all([
+  const [liste, notes, libres, moisLibres] = await Promise.all([
     memoK('publies', () => q(sb.from('logements').select(cols).eq('statut', 'publie').order('created_at', { ascending: false }).limit(300)), 60000),   // séjours et locations ; la page filtre selon la formule
     memoK('notes', () => q(sb.from('notes').select('cible, moyenne, nombre').limit(5000)).then(n => Object.fromEntries(n.map(x => [x.cible, x]))), 60000),
-    r.arrivee && r.depart && r.depart > r.arrivee ? memoK(`libres-${r.arrivee}-${r.depart}`, () => q(sb.rpc('logements_libres', { d1: r.arrivee, d2: r.depart })).then(l => new Set(l)), 60000) : null]);
-  return { liste: liste.map(l => ({ ...l, pos: positionDe(l) })), notes, libres, agence: avecPoint };
+    r.arrivee && r.depart && r.depart > r.arrivee ? memoK(`libres-${r.arrivee}-${r.depart}`, () => q(sb.rpc('logements_libres', { d1: r.arrivee, d2: r.depart })).then(l => new Set(l)), 60000) : null,
+    r.mois && !enLocation(r) ? KazIntel.libresDuMois(r.mois).catch(() => null) : null]);
+  KazIntel.copieEcrire('publies', { liste: liste.map(KazIntel.allegee), notes, agence: avecPoint, loc: LOC_ON });   // pour l'affichage immédiat à la prochaine visite
+  return { liste: liste.map(l => ({ ...l, pos: positionDe(l) })), notes, libres, moisLibres, agence: avecPoint };
 }
 function filtrer(r, d, terr) {
   const nc = normCommune(r.commune), loc = enLocation(r), nn = !loc && r.arrivee && r.depart ? nuits(r.arrivee, r.depart) : 0, rang = r.dpe ? CLASSES_DPE.indexOf(r.dpe) : -1;
@@ -88,7 +92,7 @@ function filtrer(r, d, terr) {
     const f = l.formule || 'sejour';
     return (loc ? f !== 'sejour' && Number(l.loyer_mois) > 0 : f !== 'location') &&   // séjours : tout sauf la location seule (elle n'a pas de prix à la nuit)
       (!terr || terr === 'partout' || l.territoire === terr) && (!nc || normCommune(l.commune).includes(nc)) &&
-      (loc || ((!d.libres || d.libres.has(l.id)) && (!nn || nn >= l.min_nuits) && (!r.voyageurs || l.voyageurs >= r.voyageurs) && (!r.annul.length || r.annul.includes(l.annulation)))) &&
+      (loc || ((!d.libres || d.libres.has(l.id)) && (!r.mois || !d.moisLibres || d.moisLibres.has(l.id)) && (!nn || nn >= l.min_nuits) && (!r.voyageurs || l.voyageurs >= r.voyageurs) && (!r.annul.length || r.annul.includes(l.annulation)))) &&
       (!r.pmin || prixDe(l, r) >= r.pmin) && (!r.pmax || prixDe(l, r) <= r.pmax) && (!r.ch || l.chambres >= r.ch) && (!r.lits || l.lits >= r.lits) && (!r.sdb || l.sdb >= r.sdb) &&
       (!r.surf || Number(l.surface_m2) >= r.surf) && (!r.dpe || (CLASSES_DPE.indexOf(l.dpe) >= 0 && CLASSES_DPE.indexOf(l.dpe) <= rang)) &&
       (!r.meuble || l.meuble === (r.meuble === 'oui')) && (!r.dispo || !l.dispo_le || j10(l.dispo_le) <= r.dispo) &&
@@ -125,9 +129,12 @@ async function pageRecherche() {
   const r = lireRecherche();
   if (r.favoris && !exigeCompte()) return;
   document.body.classList.add('page-rech'); document.body.classList.toggle('vue-carte', r.vue === 'carte');
-  RCH = { r, d: null, res: [], terr: r.territoire || 'Martinique', carte: null, L: null, calque: null, marqueurs: new Map(), page: PAR_PAGE, prog: false, sel: [], allumes: new Set() };
+  RCH = { r, d: null, res: [], terr: r.territoire || 'Martinique', carte: null, L: null, calque: null, marqueurs: new Map(), page: PAR_PAGE, prog: false, sel: [], allumes: new Set(), compris: null };
+  const phrase = String(param().q || '').trim().slice(0, 160);   // « #/recherche?q=villa piscine au Diamant » : la phrase de l'accueil ou d'un lien partagé
+  if (phrase) { KazIntel.appliquerPhrase(phrase, true); history.replaceState(history.state, '', adresseRecherche(RCH.r)); pageEnCours = location.hash; }
   vue(`<div class="rech">
     <div class="rech-barre" id="rechBarre"><div class="wrap">
+      ${KazIntel.formulaire('rech')}
       <div class="rech-l1"><button type="button" class="resume" id="resume" aria-expanded="false" aria-controls="fRech">${ico('explorer')}<span><b id="resumeL1"></b><small id="resumeL2"></small></span></button>
         <form class="rech-form" id="fRech" role="search" aria-label="Où et quand">
           <label><span>Où</span><select name="territoire"><option value="partout">Tous les territoires</option>${NOMS_TERRITOIRES.map(x => `<option ${x === (r.territoire || 'Martinique') ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
@@ -144,7 +151,7 @@ async function pageRecherche() {
         <button type="button" class="zone-btn" id="zoneBtn" hidden>${ico('zone')} Rechercher dans cette zone</button><div class="apercu" id="apercu" hidden></div></section>
     </div>
     <button type="button" class="bascule" id="bascule"></button></div>`);
-  barreRapide(); mesurerBarre(); brancherPage();
+  barreRapide(); mesurerBarre(); brancherPage(); KazIntel.brancher('rech'); if (phrase) $('#intelQ').value = phrase;
   const mq = matchMedia('(min-width: 1024px)'), mqCol = matchMedia(COLONNE_FILTRES), auChangement = () => { placerFiltres(); mesurerBarre(); preparerCarte(); RCH?.carte?.taille(); };
   mq.addEventListener('change', auChangement); mqCol.addEventListener('change', auChangement); addEventListener('resize', mesurerBarre);
   surDepart(() => { mq.removeEventListener('change', auChangement); mqCol.removeEventListener('change', auChangement); removeEventListener('resize', mesurerBarre); RCH?.carte?.detruire(); RCH = null; document.documentElement.style.removeProperty('--barre'); delete window.__carteKaz; });
@@ -154,9 +161,15 @@ async function chargerResultats() {
   const el = $('#rechListe'); if (!RCH || !el) return;
   if (!PRET) { el.innerHTML = videLogements(); return; }
   try {
-    RCH.d = await donneesRecherche(RCH.r);
+    const copie = KazIntel.copieLire('publies');   // dernières annonces gardées sur l'appareil : affichées tout de suite, remplacées par celles de la base dès qu'elles arrivent
+    if (copie && copie.liste?.length) {
+      RCH.d = { liste: copie.liste.map(l => ({ ...l, pos: positionDe(l) })), notes: copie.notes || {}, libres: null, moisLibres: null, agence: !!copie.agence, copie: true };
+      if (!LOC_ON) RCH.r.formule = '';
+      KazIntel.donnees(RCH.d.liste); el.removeAttribute('aria-busy'); barreRapide(); rendreListe(); majPanneau();
+    }
+    const frais = await donneesRecherche(RCH.r);
     if (!RCH || !$('#rechListe')) return;
-    el.removeAttribute('aria-busy');
+    RCH.d = frais; el.removeAttribute('aria-busy'); KazIntel.donnees(frais.liste);
     if (!LOC_ON) RCH.r.formule = '';   // la location n'est pas encore installée dans la base
     if (RCH.r.tri === 'note' && !Object.keys(RCH.d.notes).length) RCH.r.tri = 'recent';   // pas d'avis : pas de tri par note
     barreRapide(); rendreListe(); majPanneau(); preparerCarte(); majCarte(true);
@@ -174,15 +187,19 @@ function barreRapide() {
   const r = RCH.r, nf = nbFiltres(r), nc = compares().length;
   $('#rechL2').innerHTML = `<button type="button" class="puce ${nf ? 'on' : ''}" id="ouvrirFiltres" aria-haspopup="dialog">${ico('filtre')} Filtres${nf ? ` <span class="n">${nf}</span>` : ''}</button>
     ${LOC_ON ? `<button type="button" class="puce" data-formule="" aria-pressed="${!enLocation(r)}">🏝️ Séjours</button><button type="button" class="puce" data-formule="location" aria-pressed="${enLocation(r)}">🔑 Location</button><span class="sep" aria-hidden="true"></span>` : ''}
+    ${enLocation(r) ? `<button type="button" class="puce" data-meuble="oui" aria-pressed="${r.meuble === 'oui'}">🛋️ Meublé</button><button type="button" class="puce" data-meuble="non" aria-pressed="${r.meuble === 'non'}">Vide</button><span class="sep" aria-hidden="true"></span>`
+      : RCH.d?.agence ? `<button type="button" class="puce" data-annul="flexible" aria-pressed="${r.annul.includes('flexible')}">Annulation souple</button><span class="sep" aria-hidden="true"></span>` : ''}
     ${EQ_RAPIDES.map(k => { const e = EQUIP.find(x => x[0] === k); return `<button type="button" class="puce" data-eq="${k}" aria-pressed="${r.eq.includes(k)}"><span aria-hidden="true">${e[1]}</span> ${esc(e[2])}</button>`; }).join('')}
     <span class="sep" aria-hidden="true"></span>
     ${Object.entries(TYPES).map(([k, t]) => `<button type="button" class="puce" data-type="${k}" aria-pressed="${r.types.includes(k)}">${esc(t)}</button>`).join('')}
     ${r.zone ? `<button type="button" class="puce on" id="effZone" aria-label="Retirer la zone de la carte">${ico('zone')} Zone de la carte ${ico('fermer')}</button>` : ''}
     ${r.favoris ? `<button type="button" class="puce on" id="effFav" aria-label="Voir tous les logements, pas seulement les favoris">${ico('coeur')} Mes favoris ${ico('fermer')}</button>` : ''}
     ${nc ? `<a class="puce" href="#/comparer">${ico('comparer')} Comparer <span class="n">${nc}</span></a>` : ''}`;
+  document.querySelector('.rech')?.classList.toggle('mode-loc', enLocation(r));   // en location : ni dates ni voyageurs
+  KazIntel.marquerBarre();
   const lieuTxt = r.commune || (r.zone ? 'Zone de la carte' : r.territoire && r.territoire !== 'partout' ? r.territoire : 'Où partir ?');
   $('#resumeL1').textContent = lieuTxt;
-  $('#resumeL2').textContent = [r.arrivee && r.depart ? `${jour(r.arrivee)} → ${jour(r.depart)}` : 'Dates libres', r.voyageurs ? `${r.voyageurs} voyageur${s_(r.voyageurs)}` : 'Voyageurs'].join(' · ');
+  $('#resumeL2').textContent = enLocation(r) ? 'Location au mois ou à l’année' : [r.arrivee && r.depart ? `${jour(r.arrivee)} → ${jour(r.depart)}` : 'Dates libres', r.voyageurs ? `${r.voyageurs} voyageur${s_(r.voyageurs)}` : 'Voyageurs'].join(' · ');
 }
 
 // ---------------------------------------------------------------- liste des résultats
@@ -200,6 +217,7 @@ function rendreListe() {
   const el = $('#rechListe');
   el.innerHTML = `<div class="rech-tete"><h1 id="rechTitre" aria-live="polite">${titre}</h1><div class="actions">
       <label class="sr" for="triRech">Trier</label><select id="triRech" class="btn btn-s">${opts(trisDispo(d), r.tri)}</select>
+      <button type="button" class="btn btn-s" data-partager-rech>${ico('partage')} Partager</button>
       <button type="button" class="btn btn-s" data-alerte hidden>${ico('cloche')} Créer une alerte</button></div></div>
     ${pastillesHtml(r)}
     <div class="terr">${terrs.length > 1 || (terrs.length === 1 && terrs[0] !== terr) ? `<span role="group" aria-label="Territoires" class="terr-g">${terrs.map(t => `<button type="button" class="puce" data-terr="${esc(t)}" aria-pressed="${t === terr}">${esc(t)} · ${compte[t]}</button>`).join('')}${terrs.length > 1 ? `<button type="button" class="puce" data-terr="partout" aria-pressed="${terr === 'partout'}">Partout · ${tous.length}</button>` : ''}</span>` : ''}
@@ -227,8 +245,8 @@ function videRecherche(r, ailleurs) {
 // pastilles des filtres actifs (un toucher retire le filtre) et « Tout effacer »
 function pastillesHtml(r) {
   const P = pastilles(r); if (!P.length) return '';
-  return `<div class="pastilles" id="pastilles" role="group" aria-label="Filtres actifs">${P.map((p, i) => `<button type="button" class="puce on" data-off="${i}" aria-label="Retirer le filtre : ${esc(p.t)}">${esc(p.t)} ${ico('fermer')}</button>`).join('')}
-    <button type="button" class="lien" id="toutEffacer">Tout effacer</button></div>`;
+  return `<div class="pastilles" id="pastilles" role="group" aria-label="Filtres actifs">${KazIntel.enTete()}${P.map((p, i) => `<button type="button" class="puce on" data-off="${i}" aria-label="Retirer le filtre : ${esc(p.t)}">${esc(p.t)} ${ico('fermer')}</button>`).join('')}
+    <button type="button" class="lien" id="toutEffacer">Tout effacer</button></div>${KazIntel.enPied()}`;
 }
 // logements vus récemment sur cet appareil (la liste est gardée ici, pas dans la base) ; seulement ceux qui sont encore publiés
 function vusRecemment(d) {
@@ -236,11 +254,11 @@ function vusRecemment(d) {
   return `<section class="vus" aria-labelledby="tVus"><div class="vus-t"><h2 id="tVus">Vus récemment</h2><button type="button" class="lien" id="effVus">Effacer</button></div>
     <div class="vus-l">${ls.map(l => `<a class="vu" href="#/logement/${l.id}"><span class="vu-ph">${l.photos?.[0] ? `<img src="${esc(photo(l.photos[0]))}" alt="" loading="lazy">` : '🏝️'}</span><b>${esc(l.titre)}</b><span class="muted petit">${esc(l.commune)} · ${l.formule === 'location' ? (l.loyer_mois ? eur(l.loyer_mois) + ' / mois' : '') : eur(l.prix_nuit) + ' / nuit'}</span></a>`).join('')}</div></section>`;
 }
-function carteResultat(l) {
+function carteResultat(l, i = 9) {
   const n = RCH.d.notes[l.id], r = RCH.r, loc = enLocation(r), nn = !loc && r.arrivee && r.depart ? nuits(r.arrivee, r.depart) : 0, lien = `#/logement/${l.id}${loc ? '' : qsDates(r)}`;
   const eq = EQUIP.filter(e => (l.equipements || []).includes(e[0])).slice(0, 4), phs = (l.photos || []).slice(0, 6).map(photo).filter(Boolean);
   return `<article class="res" data-id="${l.id}">
-    <div class="res-ph" data-photos="${esc(JSON.stringify(phs))}" data-i="0"><a href="${lien}" tabindex="-1" aria-hidden="true">${phs[0] ? `<img src="${esc(phs[0])}" alt="" loading="lazy">` : '<span class="vide">🏝️</span>'}</a>
+    <div class="res-ph" data-photos="${esc(JSON.stringify(phs))}" data-i="0"><a href="${lien}" tabindex="-1" aria-hidden="true">${phs[0] ? `<img src="${esc(phs[0])}" alt="" width="400" height="300" decoding="async" ${i < 2 ? 'fetchpriority="high"' : 'loading="lazy"'}>` : '<span class="vide">🏝️</span>'}</a>
       ${phs.length > 1 ? `<button type="button" class="ph-nav prec" data-ph="-1" aria-label="Photo précédente : ${esc(l.titre)}">${ico('gauche')}</button><button type="button" class="ph-nav suiv" data-ph="1" aria-label="Photo suivante : ${esc(l.titre)}">${ico('droite')}</button><span class="ph-n" aria-hidden="true">1/${phs.length}</span>` : ''}</div>
     <div class="res-corps">
       <div class="res-l1"><span>${esc(l.commune)}${l.quartier ? ' · ' + esc(l.quartier) : ''}</span>${n ? `<span class="etoile">★ ${noteFr(n.moyenne)} (${n.nombre})</span>` : '<span class="tag">Nouveau</span>'}</div>
@@ -448,6 +466,7 @@ function retirerPastille(i) {
 }
 function toutEffacer() {
   Object.assign(RCH.r, filtresVides(), { commune: '', arrivee: '', depart: '', voyageurs: null, zone: null, favoris: false });
+  RCH.compris = null; const champ = $('#intelQ'); if (champ) champ.value = '';
   syncForm(); appliquer();
 }
 // bouton du téléphone : « Carte · 7 » ou « Liste · 7 »
@@ -481,7 +500,7 @@ function brancherPage() {
   };
   const relancer = async () => {
     if (!lireForm()) return;
-    if (RCH?.d) RCH.d.libres = r.arrivee && r.depart ? await memoK(`libres-${r.arrivee}-${r.depart}`, () => q(sb.rpc('logements_libres', { d1: r.arrivee, d2: r.depart })).then(l => new Set(l)), 60000).catch(() => null) : null;
+    if (RCH?.d) await KazIntel.rafraichirLibres();
     if (RCH) appliquer();
   };
   f.addEventListener('change', relancer);
@@ -504,6 +523,8 @@ function brancherPage() {
     if (b.id === 'effZone') { r.zone = null; return appliquer(); }
     if (b.id === 'effFav') { r.favoris = false; return appliquer(); }
     if (b.dataset.formule !== undefined) { if (r.formule !== b.dataset.formule) Object.assign(r, { formule: b.dataset.formule, pmin: null, pmax: null, annul: [], meuble: '', dpe: '', dispo: '', duree: null }); return appliquer({ garderVue: true }); }
+    if (b.dataset.meuble) { r.meuble = r.meuble === b.dataset.meuble ? '' : b.dataset.meuble; return appliquer({ garderVue: true }); }
+    if (b.dataset.annul) { r.annul = r.annul.includes(b.dataset.annul) ? r.annul.filter(x => x !== b.dataset.annul) : [...r.annul, b.dataset.annul]; return appliquer({ garderVue: true }); }
     if (b.dataset.eq) r.eq = r.eq.includes(b.dataset.eq) ? r.eq.filter(x => x !== b.dataset.eq) : [...r.eq, b.dataset.eq];
     if (b.dataset.type) r.types = r.types.includes(b.dataset.type) ? r.types.filter(x => x !== b.dataset.type) : [...r.types, b.dataset.type];
     appliquer(); $(`#rechL2 [data-eq="${b.dataset.eq}"], #rechL2 [data-type="${b.dataset.type}"]`)?.focus();
@@ -519,8 +540,9 @@ function brancherPage() {
     if (b.id === 'toutEffacer') return toutEffacer();
     if (b.id === 'effVus') { vusEffacer(); return appliquer({ garderVue: true }); }
     if (b.dataset.terr) { r.territoire = b.dataset.terr; r.zone = null; r.commune = ''; f.commune.value = ''; return appliquer(); }
-    if (b.id === 'plusRes') { const avant = RCH.page; RCH.page += PAR_PAGE; $('#resListe').insertAdjacentHTML('beforeend', RCH.res.slice(avant, RCH.page).map(carteResultat).join('')); if (RCH.page >= RCH.res.length) b.parentElement.remove(); else b.textContent = `Afficher ${Math.min(PAR_PAGE, RCH.res.length - RCH.page)} logements de plus`; return; }
+    if (b.id === 'plusRes') { const avant = RCH.page; RCH.page += PAR_PAGE; $('#resListe').insertAdjacentHTML('beforeend', RCH.res.slice(avant, RCH.page).map(x => carteResultat(x, 9)).join('')); if (RCH.page >= RCH.res.length) b.parentElement.remove(); else b.textContent = `Afficher ${Math.min(PAR_PAGE, RCH.res.length - RCH.page)} logements de plus`; return; }
     if (b.hasAttribute('data-alerte')) return creerAlerte();
+    if (b.hasAttribute('data-partager-rech')) return partagerRecherche();
     const a = b.dataset.act;
     if (a === 'filtres') Object.assign(r, filtresVides());
     else if (a === 'zone') r.zone = null;
@@ -588,6 +610,7 @@ function majCompteur() {
   const r = RCH?.r, b = $('#voirRes'); if (!b) return;
   const n = RCH.res.length, mot = enLocation(r) ? 'location' : 'logement';
   b.textContent = RCH.d ? `Voir ${n} ${mot}${s_(n)}` : 'Voir les logements';
+  KazIntel.marquerPanneau();
   const nn = !enLocation(r) && r.arrivee && r.depart ? nuits(r.arrivee, r.depart) : 0, t = $('#totalSejour');
   if (t) t.textContent = nn > 0 && (r.pmin || r.pmax) ? `Pour ${nn} nuit${s_(nn)} : ${r.pmin ? 'dès ' + eurCourt(r.pmin * nn) : ''}${r.pmin && r.pmax ? ', ' : ''}${r.pmax ? 'jusqu’à ' + eurCourt(r.pmax * nn) : ''} (ménage en plus).`
     : nn > 0 ? `Dates choisies : ${nn} nuit${s_(nn)}. Le total de chaque logement est affiché dans la liste.` : '';
@@ -625,6 +648,12 @@ function ouvrirFiltres() {
   if (colonneFiltres()) { if (!d.open) d.show(); $('#tFiltres').focus(); } else if (!d.open) d.showModal();
 }
 
+// partage : le lien contient tous les filtres (ils sont dans l'adresse) ; la feuille de partage du téléphone, sinon copie dans le presse-papiers
+async function partagerRecherche() {
+  const url = `${location.origin}${location.pathname}${adresseRecherche({ ...RCH.r, zone: null })}`, titre = `${RCH.res.length} logement${s_(RCH.res.length)} sur Kaz An Nou`;
+  try { if (navigator.share) await navigator.share({ title: titre, text: 'Ma recherche sur Kaz An Nou', url }); else { await navigator.clipboard.writeText(url); toast('Lien de la recherche copié : collez-le où vous voulez.'); } }
+  catch (e) { /* partage annulé */ }
+}
 // ---------------------------------------------------------------- alertes de recherche (agence.sql) : nom et critères, notification dans le compte
 const nomAlerte = (r, terr) => [r.types.length ? r.types.map(t => TYPES[t]).join(' ou ') : 'Logement', r.commune ? aLieu(r.commune) : PREPO[terr] || '', r.pmax ? `jusqu’à ${r.pmax} €` : '',
   r.voyageurs ? `${r.voyageurs} voyageur${s_(r.voyageurs)}` : ''].filter(Boolean).join(', ').slice(0, 80);
@@ -683,8 +712,11 @@ async function ongletNotifs(c) {
 }
 
 // ---------------------------------------------------------------- comparateur (jusqu'à 4 logements côte à côte)
+let compNuits = 7, compDiff = false;   // réglages du comparateur (nombre de nuits du total, « différences seulement »)
 async function pageComparer() {
-  const ids = compares();
+  const partage = String(param().ids || '').split(',').filter(x => /^[0-9a-f-]{36}$/.test(x)).slice(0, 4);   // lien partagé : #/comparer?ids=…
+  const ids = partage.length ? partage : compares();
+  if (/^\d+$/.test(param().n || '')) compNuits = Math.max(1, Math.min(60, Number(param().n)));
   if (!ids.length) return vue(`<div class="wrap" style="padding-top:24px"><h1>Comparateur</h1><div class="vide-etat"><div class="ico">⚖️</div><h3>Rien à comparer pour l’instant</h3>
     <p class="muted">Touchez « Comparer » sur 2 à 4 logements (dans la recherche, vos favoris ou une annonce) pour les voir côte à côte.</p>
     <div class="actions"><a class="btn btn-p" href="#/recherche">Chercher des logements</a><a class="btn" href="#/compte/favoris">Mes favoris</a></div></div></div>`);
@@ -693,28 +725,49 @@ async function pageComparer() {
     const avecPoint = await agenceInstallee();
     const l = await q(sb.from('logements').select('*').in('id', ids).eq('statut', 'publie')), n = await notesDe(l.map(x => x.id));
     const ls = ids.map(id => l.find(x => x.id === id)).filter(Boolean);
-    const total7 = x => Number(x.prix_nuit) * 7 + Number(x.menage || 0), min = f => Math.min(...ls.map(f)), max = f => Math.max(...ls.map(f));
-    const mieux = (x, f, sens) => ls.length > 1 && f(x) === (sens < 0 ? min(f) : max(f)) ? ' class="mieux"' : '';
+    const sejour = x => !locSeule(x) && Number(x.prix_nuit) > 0, loyer = x => Number(x.loyer_mois) > 0 && locEstLocation(x);
+    const total = x => Number(x.prix_nuit) * compNuits + Number(x.menage || 0);
+    const tot = ls.filter(sejour), lyr = ls.filter(loyer), min = (f, a) => Math.min(...a.map(f)), max = (f, a) => Math.max(...a.map(f));
+    const mieux = (x, f, sens, a = ls) => a.length > 1 && f(x) === (sens < 0 ? min(f, a) : max(f, a)) ? ' class="mieux"' : '';
     const aero = x => { const a = AEROPORTS[x.territoire], p = positionDe(x); return a && p ? Math.round(distanceKm(p, { lat: a[1], lng: a[2] })) : null; };
+    const surf = x => x.surface_m2 ? `${String(x.surface_m2).replace('.', ',').replace(/,0$/, '')} m²` : '—';
     const lignes = [
-      ['Photo', x => x.photos?.[0] ? `<img src="${esc(photo(x.photos[0]))}" alt="">` : '—'],
-      ['Logement', x => `<a href="#/logement/${x.id}"><b>${esc(x.titre)}</b></a><br><span class="muted petit">${esc(TYPES[x.type] || '')}</span>`],
+      ['Photo', x => x.photos?.[0] ? `<img src="${esc(photo(x.photos[0]))}" alt="" width="220" height="165" loading="lazy">` : '—', 1],
+      ['Logement', x => `<a href="#/logement/${x.id}"><b>${esc(x.titre)}</b></a><br><span class="muted petit">${esc(TYPES[x.type] || '')}</span>`, 1],
       ['Lieu', x => lieu(x)],
-      ['Prix par nuit', x => `<span${mieux(x, y => Number(y.prix_nuit), -1)}>${eur(x.prix_nuit)}</span>`],
-      ['Ménage', x => Number(x.menage) > 0 ? eur(x.menage) : 'Compris'],
-      ['Exemple : 7 nuits', x => `<span${mieux(x, total7, -1)}>${eur(total7(x))}</span>${x.min_nuits > 7 ? `<br><span class="muted petit">minimum ${x.min_nuits} nuits</span>` : ''}`],
-      ['Voyageurs', x => `<span${mieux(x, y => y.voyageurs, 1)}>${x.voyageurs}</span>`],
-      ['Chambres · lits', x => `${x.chambres} · ${x.lits}`], ['Salles d’eau', x => x.sdb], ['Séjour minimum', x => `${x.min_nuits} nuit${s_(x.min_nuits)}`],
+      ...(tot.length ? [['Prix par nuit', x => sejour(x) ? `<span${mieux(x, y => Number(y.prix_nuit), -1, tot)}>${eur(x.prix_nuit)}</span>` : '—'],
+        ['Ménage', x => sejour(x) ? (Number(x.menage) > 0 ? eur(x.menage) : 'Compris') : '—'],
+        [`Total pour ${compNuits} nuit${s_(compNuits)}`, x => sejour(x) ? `<span class="loc-total${mieux(x, total, -1, tot) ? ' mieux' : ''}">${eur(total(x))}</span><br><span class="muted petit">ménage compris${x.min_nuits > compNuits ? `, mais minimum ${x.min_nuits} nuits` : ''}</span>` : '—'],
+        ['Séjour minimum', x => sejour(x) ? `${x.min_nuits} nuit${s_(x.min_nuits)}` : '—']] : []),
+      ...(lyr.length ? [['Loyer par mois', x => loyer(x) ? `<span${mieux(x, y => Number(y.loyer_mois), -1, lyr)}>${eur(x.loyer_mois)}</span>` : '—'],
+        ['Charges', x => loyer(x) ? (Number(x.charges_mois) > 0 ? `+ ${eur(x.charges_mois)}` : 'Comprises') : '—'],
+        ['Surface', x => loyer(x) ? `<span${mieux(x, y => Number(y.surface_m2) || 0, 1, lyr)}>${surf(x)}</span>` : '—'],
+        ['DPE', x => loyer(x) && x.dpe ? locPastille('DPE', x.dpe) : '—'], ['Meublé', x => loyer(x) && x.meuble !== null && x.meuble !== undefined ? (x.meuble ? 'Meublé' : 'Vide') : '—'],
+        ['Disponible', x => loyer(x) ? locDispo(x) : '—']] : []),
+      ...(tot.length ? [['Voyageurs', x => sejour(x) ? `<span${mieux(x, y => y.voyageurs, 1, tot)}>${x.voyageurs}</span>` : '—']] : []),
+      ['Chambres · lits', x => `<span${mieux(x, y => y.chambres, 1)}>${x.chambres}</span> · ${x.lits}`], ['Salles d’eau', x => x.sdb],
       ['Note', x => n[x.id] ? `★ ${noteFr(n[x.id].moyenne)} (${n[x.id].nombre} avis)` : 'Pas encore d’avis'],
       ['Aéroport', x => aero(x) !== null ? `${aero(x)} km à vol d’oiseau` : '—'],
-      ...(avecPoint ? [['Annulation', x => x.annulation ? ANNULATION[x.annulation][0] : 'À convenir'], ['N° d’enregistrement', x => x.numero_enregistrement ? esc(x.numero_enregistrement) : '—']] : []),
+      ...(avecPoint ? [['Annulation', x => sejour(x) ? (x.annulation ? ANNULATION[x.annulation][0] : 'À convenir') : '—'], ['N° d’enregistrement', x => x.numero_enregistrement ? esc(x.numero_enregistrement) : '—']] : []),
       ...EQUIP.filter(e => ls.some(x => (x.equipements || []).includes(e[0]))).map(e => [`${e[1]} ${esc(e[2])}`, x => (x.equipements || []).includes(e[0]) ? '✓ Oui' : '<span class="muted">—</span>']),
-      ['', x => `<button type="button" class="btn btn-s" data-retirer="${x.id}">Retirer</button>`]];
+      ...(partage.length ? [] : [['', x => `<button type="button" class="btn btn-s" data-retirer="${x.id}">Retirer</button>`, 1]])];
+    const cellules = lignes.map(([t, f, fixe]) => ({ t, cases: ls.map(x => f(x)), fixe }));
+    const lien = `${location.origin}${location.pathname}#/comparer?ids=${ls.map(x => x.id).join(',')}${tot.length ? '&n=' + compNuits : ''}`;
     vue(`<div class="wrap" style="padding:24px 0 40px"><div class="titre-s"><h1>Comparateur</h1><a class="btn btn-s" href="#/recherche">${ico('plus')} Ajouter des logements</a></div>
-      <p class="muted">${ls.length} logement${s_(ls.length)} côte à côte. En vert : le meilleur de chaque ligne (prix le plus bas, le plus de voyageurs).${ls.length < ids.length ? ' Un logement retiré de la location n’apparaît plus.' : ''}</p>
-      <div class="tableau-defile"><table class="comp"><caption class="sr">Comparaison des logements</caption><tbody>
-        ${lignes.map(([t, f]) => `<tr><th scope="row">${t}</th>${ls.map(x => `<td>${f(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`);
-    $('#app').onclick = e => { const b = e.target.closest('[data-retirer]'); if (b) { basculerComparer(b.dataset.retirer); pageComparer(); } };
-    surDepart(() => { $('#app').onclick = null; });
+      <p class="muted">${ls.length} logement${s_(ls.length)} côte à côte. En vert : le meilleur de chaque ligne (prix le plus bas, le plus de voyageurs ou de chambres, la plus grande surface).${ls.length < ids.length ? ' Un logement retiré de la location n’apparaît plus.' : ''}${partage.length ? ' Comparaison partagée par lien.' : ''}</p>
+      <div class="comp-outils">${tot.length ? `<label>Total pour <input type="number" id="compN" min="1" max="60" value="${compNuits}" inputmode="numeric" style="width:64px;min-height:40px;border:1px solid var(--ligne2);border-radius:10px;padding:0 8px;font-size:16px"> nuits</label>` : ''}
+        <label><input type="checkbox" id="compDiff" ${compDiff ? 'checked' : ''}> Montrer seulement ce qui diffère</label>
+        <button type="button" class="btn btn-s" id="compPartage">${ico('partage')} Partager la comparaison</button></div>
+      <div class="tableau-defile ${compDiff ? 'diff-seule' : ''}" id="compTab"><table class="comp"><caption class="sr">Comparaison des logements</caption><tbody>
+        ${cellules.map(c => `<tr class="${!c.fixe && c.cases.every(x => x === c.cases[0]) && ls.length > 1 ? 'meme' : ''}"><th scope="row">${c.t}</th>${c.cases.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`);
+    $('#app').onclick = e => {
+      const b = e.target.closest('[data-retirer]'); if (b) { basculerComparer(b.dataset.retirer); pageComparer(); return; }
+      if (e.target.closest('#compPartage')) { (navigator.share ? navigator.share({ title: 'Comparaison de logements', url: lien }) : navigator.clipboard.writeText(lien).then(() => toast('Lien de la comparaison copié.'))).catch(() => {}); }
+    };
+    $('#app').onchange = e => {
+      if (e.target.id === 'compN') { compNuits = Math.max(1, Math.min(60, Math.round(Number(e.target.value)) || 7)); pageComparer(); }
+      if (e.target.id === 'compDiff') { compDiff = e.target.checked; $('#compTab')?.classList.toggle('diff-seule', compDiff); }
+    };
+    surDepart(() => { $('#app').onclick = null; $('#app').onchange = null; });
   } catch (e) { vue(`<div class="wrap" style="padding-top:24px">${erreurEtat(e)}</div>`); }
 }
